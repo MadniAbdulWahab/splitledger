@@ -23,3 +23,7 @@ constraint and were answered with the winning expense (seen in the test log).
 `/actuator/health/readiness`, process runs as uid 10001 (non-root). Over HTTP: expense created
 (`201`), same key and body replayed (`201`, `Idempotent-Replayed: true`), same key with a changed
 amount rejected (`409`), balances `+500 / -500`, invalid IBAN rejected (`400` with field error).
+
+**CI** (2026-10-21): first GitHub Actions run on `main` (commit `ebe4eb7`) green; both jobs
+passed (`test`: `./mvnw -B verify` with Testcontainers on ubuntu-24.04; `docker-image`: image
+build). Run: https://github.com/MadniAbdulWahab/splitledger/actions/runs/39504551446
