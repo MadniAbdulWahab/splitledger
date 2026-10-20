@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: splitledger-api
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/splitledger}
+    username: ${DB_USER:splitledger}
+    password: ${DB_PASSWORD:}
+  jpa:
+    # Flyway owns the schema; Hibernate only checks that entities match it.
+    hibernate:
+      ddl-auto: validate
+    # No lazy loading during JSON rendering: every query happens inside the service layer.
+    open-in-view: false
+  mvc:
+    problemdetails:
+      enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
