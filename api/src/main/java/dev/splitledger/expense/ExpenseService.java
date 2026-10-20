@@ -72,18 +72,41 @@ public class ExpenseService {
     }
 
     public ExpenseResponse get(long groupId, long expenseId) {
-        return readTx.execute(status -> expenses.findByIdAndGroupId(expenseId, groupId)
-                .map(ExpenseResponse::from)
-                .orElseThrow(() -> new NotFoundException("Expense " + expenseId + " not found in group " + groupId)));
+        return readTx.execute(status -> toResponse(findInGroup(groupId, expenseId)));
     }
 
+    /**
+     * Cancels an expense by writing reversing ledger entries. The expense row and its original
+     * entries stay as they are; balances return to where they were before the expense.
+     */
+    public ExpenseResponse reverse(long groupId, long expenseId) {
+        return writeTx.execute(status -> {
+            Expense expense = findInGroup(groupId, expenseId);
+            ledgerService.reverse(groupId, EntryKind.EXPENSE, expense.getId());
+            return ExpenseResponse.from(expense, true);
+        });
+    }
+
+    private Expense findInGroup(long groupId, long expenseId) {
+        return expenses.findByIdAndGroupId(expenseId, groupId)
+                .orElseThrow(() -> new NotFoundException("Expense " + expenseId + " not found in group " + groupId));
+    }
+
+    private ExpenseResponse toResponse(Expense expense) {
+        return ExpenseResponse.from(expense, ledgerService.isReversed(EntryKind.EXPENSE, expense.getId()));
+    }
+
+    /**
+     * A replay returns the expense as it is now. Expenses never change, so this equals the original
+     * response, except that {@code reversed} is true if the expense was reversed in the meantime.
+     */
     private Optional<Creation> findEarlier(long groupId, String idempotencyKey, String requestHash) {
         return expenses.findByGroupIdAndIdempotencyKey(groupId, idempotencyKey).map(expense -> {
             if (!expense.getRequestHash().equals(requestHash)) {
                 throw new ConflictException(
                         "Idempotency-Key '" + idempotencyKey + "' was already used with a different request body");
             }
-            return new Creation(ExpenseResponse.from(expense), true);
+            return new Creation(toResponse(expense), true);
         });
     }
 
@@ -107,7 +130,7 @@ public class ExpenseService {
                 idempotencyKey, requestHash, allocations));
 
         ledgerService.post(groupId, EntryKind.EXPENSE, expense.getId(), postingsFor(expense, allocations));
-        return new Creation(ExpenseResponse.from(expense), false);
+        return new Creation(ExpenseResponse.from(expense, false), false);
     }
 
     /** Payer is credited the full amount, every participant is debited their share; the sum is zero. */

@@ -52,4 +52,10 @@ class ExpenseController {
     ExpenseResponse get(@PathVariable long groupId, @PathVariable long expenseId) {
         return expenseService.get(groupId, expenseId);
     }
+
+    /** Corrections never edit: a wrong expense is reversed and, if needed, entered again. */
+    @PostMapping("/{expenseId}/reversal")
+    ExpenseResponse reverse(@PathVariable long groupId, @PathVariable long expenseId) {
+        return expenseService.reverse(groupId, expenseId);
+    }
 }

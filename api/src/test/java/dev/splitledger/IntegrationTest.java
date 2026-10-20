@@ -11,6 +11,7 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
 import java.io.UnsupportedEncodingException;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,6 +43,24 @@ public abstract class IntegrationTest {
         MvcTestResult result = mvc.post().uri("/groups/{id}/members", groupId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"displayName\": \"%s\"}".formatted(displayName))
+                .exchange();
+        assertThat(result).hasStatus(201);
+        return idOf(result);
+    }
+
+    /** Creates an expense split equally between the participants and returns its id. */
+    protected long createExpense(long groupId, long payerId, long amountCents, String description, long... participants) {
+        StringBuilder list = new StringBuilder();
+        for (long participant : participants) {
+            list.append(list.isEmpty() ? "" : ", ").append("{\"memberId\": ").append(participant).append('}');
+        }
+        MvcTestResult result = mvc.post().uri("/groups/{id}/expenses", groupId)
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"payerId": %d, "amountCents": %d, "description": "%s", "expenseDate": "2026-10-21",
+                         "splitMode": "EQUAL", "participants": [%s]}
+                        """.formatted(payerId, amountCents, description, list))
                 .exchange();
         assertThat(result).hasStatus(201);
         return idOf(result);

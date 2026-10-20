@@ -30,6 +30,9 @@ public class LedgerEntry {
     @Column(name = "group_id", nullable = false)
     private Long groupId;
 
+    @Column(nullable = false)
+    private long seq;
+
     @Column(name = "member_id", nullable = false)
     private Long memberId;
 
@@ -46,16 +49,26 @@ public class LedgerEntry {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "previous_hash", nullable = false, length = 64)
+    private String previousHash;
+
+    @Column(nullable = false, length = 64)
+    private String hash;
+
     protected LedgerEntry() {
     }
 
-    LedgerEntry(Long groupId, Long memberId, long amountCents, EntryKind kind, Long referenceId) {
+    LedgerEntry(long groupId, long seq, long memberId, long amountCents, EntryKind kind, long referenceId,
+                String previousHash) {
         this.groupId = groupId;
+        this.seq = seq;
         this.memberId = memberId;
         this.amountCents = amountCents;
         this.kind = kind;
         this.referenceId = referenceId;
         this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        this.previousHash = previousHash;
+        this.hash = LedgerHasher.hash(previousHash, groupId, seq, memberId, amountCents, kind, referenceId, createdAt);
     }
 
     public Long getId() {
@@ -64,6 +77,10 @@ public class LedgerEntry {
 
     public Long getGroupId() {
         return groupId;
+    }
+
+    public long getSeq() {
+        return seq;
     }
 
     public Long getMemberId() {
@@ -84,5 +101,13 @@ public class LedgerEntry {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public String getPreviousHash() {
+        return previousHash;
+    }
+
+    public String getHash() {
+        return hash;
     }
 }

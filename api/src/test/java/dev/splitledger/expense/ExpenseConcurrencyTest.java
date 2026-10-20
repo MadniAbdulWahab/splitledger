@@ -1,6 +1,9 @@
 package dev.splitledger.expense;
 
 import dev.splitledger.IntegrationTest;
+import dev.splitledger.common.ConflictException;
+import dev.splitledger.ledger.ChainVerification;
+import dev.splitledger.ledger.LedgerService;
 import dev.splitledger.expense.ExpenseDtos.CreateExpenseRequest;
 import dev.splitledger.expense.ExpenseDtos.ParticipantRequest;
 import org.junit.jupiter.api.Test;
@@ -27,6 +30,9 @@ class ExpenseConcurrencyTest extends IntegrationTest {
 
     @Autowired
     private ExpenseService expenseService;
+
+    @Autowired
+    private LedgerService ledgerService;
 
     @Test
     void sameIdempotencyKeyFromManyThreadsCreatesExactlyOneExpense() throws Exception {
@@ -61,6 +67,33 @@ class ExpenseConcurrencyTest extends IntegrationTest {
                     select reference_id from ledger_entry where group_id = ?
                     group by reference_id having sum(amount_cents) <> 0) unbalanced
                 """, groupId)).isZero();
+
+        // 16 expenses x 4 entries, appended by 16 threads, still form one gap-free, unforked chain.
+        ChainVerification chain = ledgerService.verify(groupId);
+        assertThat(chain.valid()).isTrue();
+        assertThat(chain.entriesChecked()).isEqualTo(THREADS * 4L);
+    }
+
+    @Test
+    void concurrentReversalsOfOneExpenseSucceedExactlyOnce() throws Exception {
+        long groupId = createGroup("Race reversal");
+        long anna = addMember(groupId, "Anna");
+        long ben = addMember(groupId, "Ben");
+        long expenseId = createExpense(groupId, anna, 500, "Reverse me", anna, ben);
+
+        List<String> outcomes = runConcurrently(i -> {
+            try {
+                expenseService.reverse(groupId, expenseId);
+                return "reversed";
+            } catch (ConflictException e) {
+                return "conflict";
+            }
+        });
+
+        assertThat(outcomes).filteredOn("reversed"::equals).hasSize(1);
+        assertThat(outcomes).filteredOn("conflict"::equals).hasSize(THREADS - 1);
+        assertThat(ledgerService.verify(groupId).valid()).isTrue();
+        assertThat(ledgerService.balances(groupId)).allSatisfy(b -> assertThat(b.balanceCents()).isZero());
     }
 
     private interface Task<T> {

@@ -79,15 +79,16 @@ public final class ExpenseDtos {
             LocalDate expenseDate,
             SplitMode splitMode,
             List<ShareResponse> shares,
+            boolean reversed,
             Instant createdAt) {
 
-        static ExpenseResponse from(Expense expense) {
+        static ExpenseResponse from(Expense expense, boolean reversed) {
             List<ShareResponse> shares = expense.getShares().stream()
                     .map(s -> new ShareResponse(s.getMemberId(), s.getAmountCents(), s.getShareUnits()))
                     .toList();
             return new ExpenseResponse(expense.getId(), expense.getGroupId(), expense.getPayerId(),
                     expense.getAmountCents(), expense.getDescription(), expense.getNotes(),
-                    expense.getExpenseDate(), expense.getSplitMode(), shares, expense.getCreatedAt());
+                    expense.getExpenseDate(), expense.getSplitMode(), shares, reversed, expense.getCreatedAt());
         }
     }
 }
