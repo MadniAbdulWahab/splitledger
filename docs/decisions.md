@@ -144,3 +144,75 @@ local development databases, the migration stops with a clear message if `ledger
 empty (`docker compose down -v` resets it). Applied migrations are never edited: Flyway would
 reject the changed checksum. Once real data exists, schema changes follow expand, backfill,
 contract.
+
+## 13. API tokens and one central membership rule (2026-10-21)
+
+Members log in with opaque API tokens (`slt_` + 32 random bytes), sent as
+`Authorization: Bearer ...`. Only the token's SHA-256 is stored and the token is shown once. A
+fast hash is right here: bcrypt exists to slow down guessing of low-entropy passwords, and a
+256-bit random token cannot be guessed. JWTs would add signing keys and make revocation harder,
+for no benefit in a single service.
+
+- **Access:** one `AuthorizationManager` in the Spring Security filter chain allows
+  `/groups/{groupId}/**` only for members of that group. It runs before any controller, so a new
+  endpoint under that path is protected automatically (a test calls endpoints as a stranger,
+  including ones written after the rule). A missing group and a foreign group both return 403, so
+  the response does not reveal which ids exist.
+- **Joining:** the group creator becomes the first member. Adding a friend creates a member and
+  a one-time invite code (stored hashed); the friend registers and accepts it.
+- **CSRF protection is off:** the token travels in a header that browsers never add on their
+  own, so cross-site requests cannot carry it. Sessions are stateless.
+- **Registration:** open by default; with `splitledger.registration-code` set (on a public host)
+  registering needs that code, compared in constant time.
+
+Security came before the import, unlike the original day-3 order: the import needs to know whose
+account a statement belongs to, and bank candidates must be visible only to that person.
+
+## 14. Bank import: fingerprints, occurrence index, privacy (2026-10-21)
+
+The parser sits behind `StatementParser`, so CAMT.053 can be added without touching the rest.
+The Sparkasse parser finds columns by header name (order and umlaut spelling do not matter),
+tries strict UTF-8 and otherwise reads Windows-1252, and parses amounts like `-1.240,00` directly
+into cents without floating point.
+
+**Fingerprint:** the Sparkasse CSV has no reference assigned by the bank (the end-to-end reference
+is set by the payer and is often `NOTPROVIDED`). So the fingerprint is SHA-256 over account, booking
+date, amount, counterparty IBAN and name, purpose text and end-to-end reference, plus an
+**occurrence index** among identical rows in the file. Two coffees for 3.20 EUR at the same café on
+the same day are identical rows; without the index the second would be dropped as a duplicate.
+With it they are coffee #0 and #1 of that day, and an overlapping export numbers them the same way.
+Formats with a bank reference (CAMT.053 `AcctSvcrRef`) use that instead. The spec said "bank
+reference if present, otherwise the hash"; for this CSV the hash is always used, and the end-to-end
+reference is one of its fields rather than a replacement for them.
+
+**Idempotency key vs. fingerprint:** the idempotency key protects one API request from being
+applied twice (client retries). The fingerprint protects against the same bank transaction
+arriving in two files. Different problems, different keys.
+
+**Duplicates in the database:** `unique (group_id, fingerprint)` with
+`INSERT ... ON CONFLICT DO NOTHING`. PostgreSQL decides "new or duplicate" atomically and reports
+it per row, so even parallel uploads of the same file store each transaction once with correct
+counts (tested with 4 threads).
+
+**Privacy:** the file is never stored. Incoming and pending payments are skipped (pending ones can
+still change). Outgoing payments become candidates visible only to the account owner; others get
+404, not 403, so they do not learn the id exists. Ignoring a candidate deletes counterparty and
+purpose. If the member has an IBAN in the group, a statement for another account is rejected.
+
+**Confirmation** locks the candidate row (`SELECT ... FOR UPDATE`), creates the expense in the same
+transaction and marks the row confirmed; a double click waits and gets 409. The confirmed purpose
+text is stored with the expense and is part of its search document (weight C).
+
+## 15. Greedy settle-up (2026-10-21)
+
+The member who owes most pays the member who is owed most, as much as possible, repeated until all
+balances are zero. Each payment settles at least one of the two, so at most n-1 payments.
+Finding the minimal number is NP-hard in general (it means splitting members into as many
+zero-sum groups as possible, which contains subset-sum). Greedy is not always minimal: for
++5, +6, +2, -6, -7 it suggests 4 payments where 3 suffice ({+6, -6}, {+5, +2, -7}). A test compares
+it with a brute-force optimum: minimal in 99.7% of 5,000 random groups with cent amounts, and 95%
+with small whole amounts, where exactly cancelling subsets are more common. Simple and predictable
+wins for a group of friends.
+
+Recording a payment writes ledger entries like an expense (payer +amount, receiver -amount) and
+uses the same idempotency mechanism, now shared in `IdempotentCreator`.

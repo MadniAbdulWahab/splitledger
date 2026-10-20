@@ -99,3 +99,58 @@ search "Einkauf" found "Einkäufe bei Edeka", "Pizerria" found "Pizzeria Napoli"
 **CI** (2026-10-21): GitHub Actions run on `main` (commit `50175f7`) green, both jobs, including
 the 50,000-row index test on the GitHub runner.
 Run: https://github.com/MadniAbdulWahab/splitledger/actions/runs/39507781059
+
+## 2026-10-21: day 3, security, bank import, settle-up (local)
+
+**Test suite** (`cd api && ./mvnw verify`): 108 tests, 0 failures.
+
+| New test class | Tests | Covers |
+|---|---|---|
+| `SecurityApiTest` | 5 | 401 without or with an invalid token, public health and API docs, token stored only as hash, stranger gets 403 on every group endpoint, invite code links an account once |
+| `RegistrationCodeTest` | 1 | registration needs the configured code |
+| `ParsingBuildingBlocksTest` | 19 | German amounts (incl. `-1.240,00`) and dates, Windows-1252/UTF-8/BOM, quoted CSV fields |
+| `SparkasseCsvCamtParserTest` | 5 | synthetic export, pending rows, columns by name and with umlauts, unreadable rows with line numbers, foreign formats rejected |
+| `FingerprintsTest` | 5 | two identical coffees stay two, same rows in another export match, whitespace, bank reference |
+| `BankImportApiTest` | 8 | same file twice (8 new, then 8 duplicates), overlapping file (3 new, 4 duplicates, 2 skipped, both coffees kept), confirmation creates a searchable expense and 409 on repeat, ignore deletes personal data, privacy between members, foreign account rejected, foreign format rejected, 4 parallel uploads store 8 rows |
+| `SettlementPlannerTest` | 5 | greedy plan, counterexample (4 vs. 3 payments), 5,000 random groups vs. brute-force optimum (minimal in 4,987) |
+| `SettlementApiTest` | 3 | suggested payments settle the group, payment idempotency, invalid payments, payment table append-only |
+| `OpenApiDocsTest` | 1 | `/v3/api-docs` lists every endpoint and the bearer scheme; Swagger UI reachable |
+
+**Demo** (`scripts/demo.sh` against `docker compose up --build` after `docker compose down -v`):
+
+```
+== Anna imports her March statement, the same file again, then an overlapping one
+sparkasse-csv-camt-2026-03-a.csv     new=8 duplicates=0 skipped=1
+sparkasse-csv-camt-2026-03-a.csv     new=0 duplicates=8 skipped=1
+sparkasse-csv-camt-2026-03-b.csv     new=3 duplicates=4 skipped=2
+
+== Anna confirms two shared payments and ignores the rent
+expense 1: EDEKA Center Bonn, 5412 cents
+expense 2: Lidl Bonn, 2345 cents
+rent ignored; Ben sees 0 of Anna's bank transactions
+
+== Ben adds a pizza night; his client retries the request after a timeout
+attempt 1: Idempotent-Replayed=false
+attempt 2: Idempotent-Replayed=true
+
+== Balances and suggested settle-up
+{"groupId":2,"balances":[{"memberId":3,"displayName":"Anna","balanceCents":2078},{"memberId":4,"displayName":"Ben","balanceCents":-2078}]}
+{"groupId":2,"payments":[{"fromMemberId":4,"fromName":"Ben","toMemberId":3,"toName":"Anna","toIban":"DE81000010000001234567","toBic":null,"amountCents":2078}]}
+
+== Ben pays Anna by bank transfer and records it
+{"groupId":2,"balances":[{"memberId":3,"displayName":"Anna","balanceCents":0},{"memberId":4,"displayName":"Ben","balanceCents":0}]}
+
+== Hash chain
+{"groupId":2,"valid":true,"entriesChecked":11,"headHash":"64d77cd4c662d7bf19aca9883f772975ef1879123a5b3261955e4358e0020327","balanced":true,"firstBrokenEntry":null}
+
+== Search with a typo
+"description":"Lidl Bonn"
+```
+
+Checked by hand: EDEKA 54.12 paid by Anna (+27.06), Lidl 23.45 (Anna's share 11.73 under the
+remainder rule, so +11.72), pizza 36.00 paid by Ben (-18.00): Anna +20.78. 3 expenses x 3 entries
+plus 2 payment entries = 11 chain entries.
+
+The first demo run stopped with 422 because of a bug in the script's JSON helper (it took the last
+`id` in a list, so Anna and Ben got the same member id); the API correctly rejected the duplicate
+participant. Fixed in the script.

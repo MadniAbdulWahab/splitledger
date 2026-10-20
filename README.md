@@ -23,7 +23,7 @@ Built in daily steps (see [docs/verification.md](docs/verification.md) for dated
 |---|---|
 | Groups, members with IBAN check, expenses with idempotency keys, double-entry ledger, balances | done (day 1) |
 | Hash chain with `/verify`, reversals, append-only trigger, full-text and typo-tolerant search | done (day 2) |
-| Sparkasse CSV import, settle-up, Spring Security, OpenAPI | planned (day 3) |
+| API tokens and group membership checks, Sparkasse CSV import, settle-up and payments, OpenAPI, demo script | done (day 3) |
 | AWS (ECS Fargate, RDS) with Terraform, CI/CD, CloudWatch | planned (days 4-5) |
 
 ## Run locally
@@ -35,17 +35,15 @@ cp .env.example .env          # then set your own DB_PASSWORD
 docker compose up --build     # API on http://localhost:8080, PostgreSQL on 127.0.0.1:5432 (DB_PORT in .env)
 ```
 
+Then run the whole story (two friends, a statement imported twice plus an overlapping one,
+confirmed candidates, a retried request, settle-up, chain verification, search):
+
 ```bash
-curl -s -X POST localhost:8080/groups -H 'Content-Type: application/json' -d '{"name":"WG"}'
-curl -s -X POST localhost:8080/groups/1/members -H 'Content-Type: application/json' \
-     -d '{"displayName":"Anna","iban":"DE89 3704 0044 0532 0130 00"}'
-curl -s -X POST localhost:8080/groups/1/members -H 'Content-Type: application/json' -d '{"displayName":"Ben"}'
-curl -s -X POST localhost:8080/groups/1/expenses -H 'Content-Type: application/json' \
-     -H 'Idempotency-Key: 6f1c2a' \
-     -d '{"payerId":1,"amountCents":1000,"description":"Groceries","expenseDate":"2026-10-20",
-          "splitMode":"EQUAL","participants":[{"memberId":1},{"memberId":2}]}'
-curl -s localhost:8080/groups/1/balances
+scripts/demo.sh                 # BASE_URL=... for another server
 ```
+
+Interactive API docs: http://localhost:8080/swagger-ui.html (register with `POST /users`, then use
+the token with "Authorize").
 
 Tests (unit tests plus integration tests against PostgreSQL 16 in Testcontainers):
 
@@ -53,17 +51,28 @@ Tests (unit tests plus integration tests against PostgreSQL 16 in Testcontainers
 cd api && ./mvnw verify
 ```
 
-## API (so far)
+## API
+
+Every request except registration, health and the API docs needs `Authorization: Bearer <token>`.
+Everything under `/groups/{id}` is only for members of that group (403 otherwise).
 
 | Method and path | Purpose |
 |---|---|
-| `POST /groups`, `GET /groups/{id}` | Create and read a group |
-| `POST /groups/{id}/members`, `GET /groups/{id}/members` | Add and list members (IBAN validated with ISO 13616 mod-97) |
+| `POST /users`, `GET /me` | Register (returns the API token once); your groups |
+| `POST /groups`, `GET /groups/{id}` | Create a group (you become its first member) and read it |
+| `POST /groups/{id}/members`, `GET /groups/{id}/members` | Add a friend (returns a one-time invite code) and list members |
+| `POST /invitations/accept` | Link your account to the member the invite code belongs to |
+| `PUT /groups/{id}/members/me/bank-details` | Set your IBAN/BIC (validated with ISO 13616 mod-97) |
 | `POST /groups/{id}/expenses` | Create an expense; requires an `Idempotency-Key` header |
 | `GET /groups/{id}/expenses/{expenseId}` | Read an expense with its shares |
 | `POST /groups/{id}/expenses/{expenseId}/reversal` | Cancel an expense with reversing entries (once) |
-| `GET /groups/{id}/expenses/search?q=&member=&from=&to=&min=&max=&limit=&cursor=` | Search descriptions and notes (German word forms, typos); filters; keyset pagination |
+| `GET /groups/{id}/expenses/search?q=&member=&from=&to=&min=&max=&limit=&cursor=` | Search descriptions, notes and bank purpose texts (German word forms, typos); filters; keyset pagination |
+| `POST /groups/{id}/imports` | Upload your bank statement (multipart `file`); returns new / duplicate / skipped counts |
+| `GET /groups/{id}/bank-transactions` | Your expense candidates (only you see your bank data) |
+| `POST /groups/{id}/bank-transactions/{tid}/confirmation`, `.../ignore` | Turn a candidate into a shared expense, or drop it |
 | `GET /groups/{id}/balances` | Net balance per member; positive means the group owes them |
+| `GET /groups/{id}/settlement` | Suggested payments that settle everyone, with the receiver's IBAN |
+| `POST /groups/{id}/payments`, `GET /groups/{id}/payments` | Record a settle-up payment (`Idempotency-Key`) and list them |
 | `GET /groups/{id}/verify` | Recompute the hash chain; report the first broken entry and the head hash |
 
 Amounts are integer cents. Split modes: `EQUAL`, `EXACT` (cents per person) and `SHARES` (units per
@@ -81,5 +90,8 @@ who bypasses the trigger. Design decisions are in [docs/decisions.md](docs/decis
   synthetic: invented names and test IBANs. If a real export becomes available, its header is compared locally and the parser
   adjusted; real statements are never committed. The parser sits behind an interface so other
   banks (and ISO 20022 CAMT.053) can be added.
-- Names and IBANs are personal data. Only transactions a member confirms are stored, raw files are
-  discarded after parsing, and friends are asked before their IBAN is saved.
+- Names and IBANs are personal data. The uploaded file is parsed in memory and never stored; incoming
+  and pending payments are not stored at all. Outgoing payments wait as candidates that only the
+  account owner can see. Confirming one makes it a shared expense; ignoring one deletes its
+  counterparty and purpose text and keeps only a fingerprint, date and amount, so a re-import still
+  recognizes it. Each member enters their own IBAN; nobody sets someone else's.
