@@ -22,7 +22,7 @@ Built in daily steps (see [docs/verification.md](docs/verification.md) for dated
 | Part | State |
 |---|---|
 | Groups, members with IBAN check, expenses with idempotency keys, double-entry ledger, balances | done (day 1) |
-| Hash chain, reversals, database-level append-only guard, search | planned (day 2) |
+| Hash chain with `/verify`, reversals, append-only trigger, full-text and typo-tolerant search | done (day 2) |
 | Sparkasse CSV import, settle-up, Spring Security, OpenAPI | planned (day 3) |
 | AWS (ECS Fargate, RDS) with Terraform, CI/CD, CloudWatch | planned (days 4-5) |
 
@@ -32,7 +32,7 @@ Requirements: Java 21 and Docker. Maven is not needed; the wrapper `./mvnw` down
 
 ```bash
 cp .env.example .env          # then set your own DB_PASSWORD
-docker compose up --build     # API on http://localhost:8080, PostgreSQL on 127.0.0.1:5432
+docker compose up --build     # API on http://localhost:8080, PostgreSQL on 127.0.0.1:5432 (DB_PORT in .env)
 ```
 
 ```bash
@@ -61,10 +61,15 @@ cd api && ./mvnw verify
 | `POST /groups/{id}/members`, `GET /groups/{id}/members` | Add and list members (IBAN validated with ISO 13616 mod-97) |
 | `POST /groups/{id}/expenses` | Create an expense; requires an `Idempotency-Key` header |
 | `GET /groups/{id}/expenses/{expenseId}` | Read an expense with its shares |
+| `POST /groups/{id}/expenses/{expenseId}/reversal` | Cancel an expense with reversing entries (once) |
+| `GET /groups/{id}/expenses/search?q=&member=&from=&to=&min=&max=&limit=&cursor=` | Search descriptions and notes (German word forms, typos); filters; keyset pagination |
 | `GET /groups/{id}/balances` | Net balance per member; positive means the group owes them |
+| `GET /groups/{id}/verify` | Recompute the hash chain; report the first broken entry and the head hash |
 
 Amounts are integer cents. Split modes: `EQUAL`, `EXACT` (cents per person) and `SHARES` (units per
-person). Errors are RFC 9457 problem details. Design decisions are in [docs/decisions.md](docs/decisions.md).
+person). Errors are RFC 9457 problem details. Ledger entries, expenses and shares cannot be updated
+or deleted, not even with SQL: a trigger rejects it, and `/verify` detects changes made by someone
+who bypasses the trigger. Design decisions are in [docs/decisions.md](docs/decisions.md).
 
 ## Bank data: assumptions and privacy
 
