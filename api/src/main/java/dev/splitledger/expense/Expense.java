@@ -58,6 +58,10 @@ public class Expense {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** Purpose text of the confirmed bank payment this expense came from; null for manual expenses. */
+    @Column(name = "bank_purpose", updatable = false)
+    private String bankPurpose;
+
     @ElementCollection
     @CollectionTable(name = "expense_share", joinColumns = @JoinColumn(name = "expense_id"))
     @OrderBy("memberId")
@@ -68,7 +72,8 @@ public class Expense {
 
     Expense(Long groupId, Long payerId, long amountCents, String description, String notes,
             LocalDate expenseDate, SplitMode splitMode, String idempotencyKey, String requestHash,
-            List<Allocation> allocations) {
+            String bankPurpose, List<Allocation> allocations) {
+        this.bankPurpose = bankPurpose;
         this.groupId = groupId;
         this.payerId = payerId;
         this.amountCents = amountCents;
@@ -122,6 +127,10 @@ public class Expense {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public String getBankPurpose() {
+        return bankPurpose;
     }
 
     public List<ExpenseShare> getShares() {

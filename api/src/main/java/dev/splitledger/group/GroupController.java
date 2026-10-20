@@ -3,6 +3,7 @@ package dev.splitledger.group;
 import dev.splitledger.group.GroupDtos.AcceptInvitationRequest;
 import dev.splitledger.group.GroupDtos.AddMemberRequest;
 import dev.splitledger.group.GroupDtos.AddedMemberResponse;
+import dev.splitledger.group.GroupDtos.BankDetailsRequest;
 import dev.splitledger.group.GroupDtos.CreateGroupRequest;
 import dev.splitledger.group.GroupDtos.GroupResponse;
 import dev.splitledger.group.GroupDtos.MemberResponse;
@@ -15,6 +16,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -55,6 +57,12 @@ class GroupController {
     @GetMapping("/groups/{groupId}/members")
     List<MemberResponse> listMembers(@PathVariable long groupId) {
         return groupService.listMembers(groupId);
+    }
+
+    @PutMapping("/groups/{groupId}/members/me/bank-details")
+    MemberResponse updateOwnBankDetails(@PathVariable long groupId, @AuthenticationPrincipal CurrentUser user,
+                                        @Valid @RequestBody BankDetailsRequest request) {
+        return groupService.updateOwnBankDetails(groupId, user, request);
     }
 
     @PostMapping("/invitations/accept")

@@ -63,6 +63,11 @@ public class Member {
         return member;
     }
 
+    void changeBankDetails(String iban, String bic) {
+        this.iban = iban;
+        this.bic = bic;
+    }
+
     /** Links the account and invalidates the invite code, so it cannot be used a second time. */
     void acceptInvitation(long userId) {
         this.userId = userId;

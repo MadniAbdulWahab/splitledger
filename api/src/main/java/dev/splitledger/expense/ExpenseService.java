@@ -16,6 +16,8 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.ArrayList;
@@ -60,7 +62,7 @@ public class ExpenseService {
             return earlier.get();
         }
         try {
-            return writeTx.execute(status -> insert(groupId, idempotencyKey, requestHash, request));
+            return writeTx.execute(status -> insert(groupId, idempotencyKey, requestHash, request, null));
         } catch (DataIntegrityViolationException e) {
             if (!violates(e, IDEMPOTENCY_CONSTRAINT)) {
                 throw e;
@@ -69,6 +71,20 @@ public class ExpenseService {
             // back, so read the winner in a new one and answer as if this were a retry.
             return readTx.execute(status -> findEarlier(groupId, idempotencyKey, requestHash)).orElseThrow(() -> e);
         }
+    }
+
+    /**
+     * Creates an expense inside the caller's transaction (used when a bank transaction is
+     * confirmed: the expense and the status change must commit together). The caller holds a lock
+     * that prevents a second attempt with the same key, so no replay handling is needed here.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public ExpenseResponse createInTransaction(long groupId, String idempotencyKey, CreateExpenseRequest request,
+                                               String bankPurpose) {
+        if (request.amountCents() > ExpenseDtos.MAX_AMOUNT_CENTS) {
+            throw new BusinessRuleException("Amount is above the limit of " + ExpenseDtos.MAX_AMOUNT_CENTS + " cents");
+        }
+        return insert(groupId, idempotencyKey, Sha256.hex(request.canonicalForm()), request, bankPurpose).expense();
     }
 
     public ExpenseResponse get(long groupId, long expenseId) {
@@ -110,7 +126,8 @@ public class ExpenseService {
         });
     }
 
-    private Creation insert(long groupId, String idempotencyKey, String requestHash, CreateExpenseRequest request) {
+    private Creation insert(long groupId, String idempotencyKey, String requestHash, CreateExpenseRequest request,
+                            String bankPurpose) {
         Set<Long> memberIds = groupService.memberIds(groupId);
         if (!memberIds.contains(request.payerId())) {
             throw new BusinessRuleException("Payer " + request.payerId() + " is not a member of group " + groupId);
@@ -127,7 +144,7 @@ public class ExpenseService {
         List<Allocation> allocations = SplitCalculator.split(request.amountCents(), request.splitMode(), participants);
         Expense expense = expenses.save(new Expense(groupId, request.payerId(), request.amountCents(),
                 request.description().strip(), request.notes(), request.expenseDate(), request.splitMode(),
-                idempotencyKey, requestHash, allocations));
+                idempotencyKey, requestHash, bankPurpose, allocations));
 
         ledgerService.post(groupId, EntryKind.EXPENSE, expense.getId(), postingsFor(expense, allocations));
         return new Creation(ExpenseResponse.from(expense, false), false);

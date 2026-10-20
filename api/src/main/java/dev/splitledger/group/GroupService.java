@@ -6,6 +6,7 @@ import dev.splitledger.common.NotFoundException;
 import dev.splitledger.common.SecretCodes;
 import dev.splitledger.group.GroupDtos.AddMemberRequest;
 import dev.splitledger.group.GroupDtos.AddedMemberResponse;
+import dev.splitledger.group.GroupDtos.BankDetailsRequest;
 import dev.splitledger.group.GroupDtos.GroupResponse;
 import dev.splitledger.group.GroupDtos.MemberResponse;
 import dev.splitledger.group.GroupDtos.MembershipResponse;
@@ -61,6 +62,15 @@ public class GroupService {
         String inviteCode = SecretCodes.generate(INVITE_PREFIX);
         Member member = members.save(Member.invited(groupId, displayName, iban, request.bic(), SecretCodes.hash(inviteCode)));
         return new AddedMemberResponse(MemberResponse.from(member), inviteCode);
+    }
+
+    /** Each member manages their own IBAN; others need it to pay them when settling up. */
+    @Transactional
+    public MemberResponse updateOwnBankDetails(long groupId, CurrentUser user, BankDetailsRequest request) {
+        Member member = members.findByGroupIdAndUserId(groupId, user.id())
+                .orElseThrow(() -> new NotFoundException("You are not a member of group " + groupId));
+        member.changeBankDetails(request.iban() == null ? null : Iban.normalize(request.iban()), request.bic());
+        return MemberResponse.from(member);
     }
 
     @Transactional

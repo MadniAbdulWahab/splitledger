@@ -30,6 +30,12 @@ public final class GroupDtos {
             @Pattern(regexp = "[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?", message = "is not a valid BIC") String bic) {
     }
 
+    /** Both null removes the bank details. */
+    public record BankDetailsRequest(
+            @ValidIban String iban,
+            @Pattern(regexp = "[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?", message = "is not a valid BIC") String bic) {
+    }
+
     /** {@code joined}: whether a friend's account is linked to this member yet. */
     public record MemberResponse(long id, String displayName, String iban, String bic, boolean joined) {
         static MemberResponse from(Member member) {

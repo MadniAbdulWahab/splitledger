@@ -1,5 +1,6 @@
 package dev.splitledger.expense;
 
+import dev.splitledger.common.CanonicalText;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotBlank;
@@ -10,6 +11,7 @@ import jakarta.validation.constraints.Size;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
@@ -32,33 +34,23 @@ public final class ExpenseDtos {
 
         /**
          * Deterministic text form of the request, hashed to detect "same Idempotency-Key, different
-         * body". Each field is length-prefixed so "ab"+"c" and "a"+"bc" cannot collide, and
-         * participants are sorted so their order in the JSON does not matter.
+         * body". Participants are sorted so their order in the JSON does not matter.
          */
         String canonicalForm() {
-            StringBuilder out = new StringBuilder();
-            append(out, payerId);
-            append(out, amountCents);
-            append(out, description);
-            append(out, notes);
-            append(out, expenseDate);
-            append(out, splitMode);
+            List<Object> values = new ArrayList<>();
+            values.add(payerId);
+            values.add(amountCents);
+            values.add(description);
+            values.add(notes);
+            values.add(expenseDate);
+            values.add(splitMode);
             participants.stream()
                     .sorted(Comparator.comparing(ParticipantRequest::memberId))
                     .forEach(p -> {
-                        append(out, p.memberId());
-                        append(out, p.value());
+                        values.add(p.memberId());
+                        values.add(p.value());
                     });
-            return out.toString();
-        }
-
-        private static void append(StringBuilder out, Object value) {
-            if (value == null) {
-                out.append("-1:|");
-                return;
-            }
-            String text = value.toString();
-            out.append(text.length()).append(':').append(text).append('|');
+            return CanonicalText.of(values.toArray());
         }
     }
 
@@ -79,6 +71,7 @@ public final class ExpenseDtos {
             LocalDate expenseDate,
             SplitMode splitMode,
             List<ShareResponse> shares,
+            String bankPurpose,
             boolean reversed,
             Instant createdAt) {
 
@@ -88,7 +81,8 @@ public final class ExpenseDtos {
                     .toList();
             return new ExpenseResponse(expense.getId(), expense.getGroupId(), expense.getPayerId(),
                     expense.getAmountCents(), expense.getDescription(), expense.getNotes(),
-                    expense.getExpenseDate(), expense.getSplitMode(), shares, reversed, expense.getCreatedAt());
+                    expense.getExpenseDate(), expense.getSplitMode(), shares, expense.getBankPurpose(), reversed,
+                    expense.getCreatedAt());
         }
     }
 }

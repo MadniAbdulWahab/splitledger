@@ -18,6 +18,11 @@ spring:
   mvc:
     problemdetails:
       enabled: true
+  servlet:
+    multipart:
+      # A month of statement lines is a few KB; the limit keeps uploads from filling memory.
+      max-file-size: 2MB
+      max-request-size: 2MB
 
 management:
   endpoints:
