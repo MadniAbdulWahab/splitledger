@@ -1,0 +1,37 @@
+# Private planning notes (job search), kept out of the public repo
+/2026-10-18_aws-ledger-service.md
+/prompt.txt
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Real bank data never enters the repo; only synthetic files in samples/
+/private/
+*.real.csv
+*.real.xml
+
+# Terraform state can contain secrets (e.g. the RDS password)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+*.tfplan
+
+# Build output
+target/
+!.mvn/wrapper/maven-wrapper.jar
+node_modules/
+dist/
+
+# IDE and OS
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
