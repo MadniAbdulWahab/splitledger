@@ -35,7 +35,7 @@ class SearchIndexUsageTest extends IntegrationTest {
     @Test
     void searchUsesFullTextAndTrigramIndexesOnFiftyThousandExpenses() {
         long groupId = createGroup("Seeded");
-        long anna = addMember(groupId, "Anna");
+        long anna = myMemberId(groupId);
         long ben = addMember(groupId, "Ben");
         long cem = addMember(groupId, "Cem");
         seed(groupId, anna, ben, cem);

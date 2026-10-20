@@ -1,35 +1,67 @@
 package dev.splitledger;
 
 import com.jayway.jsonpath.JsonPath;
+import dev.splitledger.security.UserService;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
+import org.springframework.web.context.WebApplicationContext;
 
 import java.io.UnsupportedEncodingException;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 /**
- * Base class for tests against the full app and a real PostgreSQL. Tests never clean up: each one
- * creates its own group, so they cannot see each other's data.
+ * Base class for tests against the full app and a real PostgreSQL. Before each test a new user
+ * "Anna" is registered, and {@link #mvc} sends her token with every request. Tests never clean up:
+ * each one creates its own users and groups, so they cannot see each other's data.
  */
 @SpringBootTest
-@AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
 public abstract class IntegrationTest {
 
     @Autowired
-    protected MockMvcTester mvc;
+    private WebApplicationContext context;
 
     @Autowired
     protected JdbcTemplate jdbc;
 
+    @Autowired
+    protected UserService userService;
+
+    /** Requests as the current test user. */
+    protected MockMvcTester mvc;
+
+    protected UserService.Registration me;
+
+    @BeforeEach
+    void signIn() {
+        me = userService.register("Anna");
+        mvc = as(me.token());
+    }
+
+    /** Requests with another user's token; the full security filter chain runs. */
+    protected MockMvcTester as(String token) {
+        return MockMvcTester.from(context, builder -> builder
+                .apply(springSecurity())
+                .defaultRequest(get("/").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .build());
+    }
+
+    protected MockMvcTester anonymous() {
+        return MockMvcTester.from(context, builder -> builder.apply(springSecurity()).build());
+    }
+
+    /** Creates a group as the current user, who becomes its first member ("Anna"). */
     protected long createGroup(String name) {
         MvcTestResult result = mvc.post().uri("/groups")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -39,13 +71,22 @@ public abstract class IntegrationTest {
         return idOf(result);
     }
 
+    protected long myMemberId(long groupId) {
+        return jdbc.queryForObject("select id from member where group_id = ? and user_id = ?", Long.class, groupId, me.id());
+    }
+
+    /** Adds a member without an account yet and returns the member id. */
     protected long addMember(long groupId, String displayName) {
+        return longAt(addMemberWithInvite(groupId, displayName), "$.member.id");
+    }
+
+    protected MvcTestResult addMemberWithInvite(long groupId, String displayName) {
         MvcTestResult result = mvc.post().uri("/groups/{id}/members", groupId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"displayName\": \"%s\"}".formatted(displayName))
                 .exchange();
         assertThat(result).hasStatus(201);
-        return idOf(result);
+        return result;
     }
 
     /** Creates an expense split equally between the participants and returns its id. */
@@ -71,9 +112,13 @@ public abstract class IntegrationTest {
     }
 
     protected static long longAt(MvcTestResult result, String path) {
+        Number value = JsonPath.read(body(result), path);
+        return value.longValue();
+    }
+
+    protected static String body(MvcTestResult result) {
         try {
-            Number value = JsonPath.read(result.getResponse().getContentAsString(), path);
-            return value.longValue();
+            return result.getResponse().getContentAsString();
         } catch (UnsupportedEncodingException e) {
             throw new IllegalStateException(e);
         }

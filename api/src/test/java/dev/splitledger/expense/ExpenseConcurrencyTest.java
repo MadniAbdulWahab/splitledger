@@ -37,7 +37,7 @@ class ExpenseConcurrencyTest extends IntegrationTest {
     @Test
     void sameIdempotencyKeyFromManyThreadsCreatesExactlyOneExpense() throws Exception {
         long groupId = createGroup("Race same key");
-        long anna = addMember(groupId, "Anna");
+        long anna = myMemberId(groupId);
         long ben = addMember(groupId, "Ben");
         CreateExpenseRequest request = request(anna, 1234, List.of(anna, ben));
 
@@ -52,7 +52,7 @@ class ExpenseConcurrencyTest extends IntegrationTest {
     @Test
     void parallelExpensesKeepEveryEventAndTheGroupBalanced() throws Exception {
         long groupId = createGroup("Race different keys");
-        long anna = addMember(groupId, "Anna");
+        long anna = myMemberId(groupId);
         long ben = addMember(groupId, "Ben");
         long cem = addMember(groupId, "Cem");
         List<Long> members = List.of(anna, ben, cem);
@@ -77,7 +77,7 @@ class ExpenseConcurrencyTest extends IntegrationTest {
     @Test
     void concurrentReversalsOfOneExpenseSucceedExactlyOnce() throws Exception {
         long groupId = createGroup("Race reversal");
-        long anna = addMember(groupId, "Anna");
+        long anna = myMemberId(groupId);
         long ben = addMember(groupId, "Ben");
         long expenseId = createExpense(groupId, anna, 500, "Reverse me", anna, ben);
 

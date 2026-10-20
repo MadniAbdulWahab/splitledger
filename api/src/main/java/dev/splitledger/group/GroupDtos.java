@@ -13,7 +13,8 @@ public final class GroupDtos {
     private GroupDtos() {
     }
 
-    public record CreateGroupRequest(@NotBlank @Size(max = 100) String name) {
+    /** {@code displayName}: the creator's name inside this group; defaults to the account name. */
+    public record CreateGroupRequest(@NotBlank @Size(max = 100) String name, @Size(max = 80) String displayName) {
     }
 
     public record GroupResponse(long id, String name, Instant createdAt) {
@@ -29,9 +30,21 @@ public final class GroupDtos {
             @Pattern(regexp = "[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?", message = "is not a valid BIC") String bic) {
     }
 
-    public record MemberResponse(long id, String displayName, String iban, String bic) {
+    /** {@code joined}: whether a friend's account is linked to this member yet. */
+    public record MemberResponse(long id, String displayName, String iban, String bic, boolean joined) {
         static MemberResponse from(Member member) {
-            return new MemberResponse(member.getId(), member.getDisplayName(), member.getIban(), member.getBic());
+            return new MemberResponse(member.getId(), member.getDisplayName(), member.getIban(), member.getBic(),
+                    member.getUserId() != null);
         }
+    }
+
+    /** Returned once when a member is added: the invite code to pass to the friend. */
+    public record AddedMemberResponse(MemberResponse member, String inviteCode) {
+    }
+
+    public record AcceptInvitationRequest(@NotBlank String code) {
+    }
+
+    public record MembershipResponse(long groupId, String groupName, long memberId, String displayName) {
     }
 }

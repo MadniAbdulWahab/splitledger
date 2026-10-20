@@ -31,7 +31,7 @@ class LedgerChainTest extends IntegrationTest {
     @BeforeEach
     void setUpGroupWithThreeExpenses() {
         groupId = createGroup("Chain");
-        anna = addMember(groupId, "Anna");
+        anna = myMemberId(groupId);
         ben = addMember(groupId, "Ben");
         createExpense(groupId, anna, 1000, "Groceries", anna, ben);
         createExpense(groupId, ben, 3000, "Train tickets", anna, ben);

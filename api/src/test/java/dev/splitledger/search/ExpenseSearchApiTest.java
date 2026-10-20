@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -24,7 +23,7 @@ class ExpenseSearchApiTest extends IntegrationTest {
     @BeforeEach
     void setUpGroup() {
         groupId = createGroup("Search");
-        anna = addMember(groupId, "Anna");
+        anna = myMemberId(groupId);
         ben = addMember(groupId, "Ben");
         cem = addMember(groupId, "Cem");
     }
@@ -120,7 +119,7 @@ class ExpenseSearchApiTest extends IntegrationTest {
         assertThat(search("cursor", "not-a-cursor")).hasStatus(400);
         assertThat(search("limit", "101")).hasStatus(400);
         assertThat(search("min", "-1")).hasStatus(400);
-        assertThat(mvc.get().uri("/groups/{id}/expenses/search?q=x", Long.MAX_VALUE)).hasStatus(404);
+        assertThat(mvc.get().uri("/groups/{id}/expenses/search?q=x", Long.MAX_VALUE)).hasStatus(403);
     }
 
     private long expense(long payer, long amountCents, String description, String notes, String date, long... participants) {
@@ -153,13 +152,5 @@ class ExpenseSearchApiTest extends IntegrationTest {
         assertThat(result).hasStatusOk();
         List<Number> ids = JsonPath.read(body(result), "$.items[*].id");
         return ids.stream().map(Number::longValue).toList();
-    }
-
-    private static String body(MvcTestResult result) {
-        try {
-            return result.getResponse().getContentAsString();
-        } catch (UnsupportedEncodingException e) {
-            throw new IllegalStateException(e);
-        }
     }
 }

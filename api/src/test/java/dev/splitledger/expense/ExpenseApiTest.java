@@ -18,7 +18,7 @@ class ExpenseApiTest extends IntegrationTest {
     @BeforeEach
     void setUpGroup() {
         groupId = createGroup("Berlin trip");
-        anna = addMember(groupId, "Anna");
+        anna = myMemberId(groupId);
         ben = addMember(groupId, "Ben");
         cem = addMember(groupId, "Cem");
     }

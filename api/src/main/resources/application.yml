@@ -1,6 +1,10 @@
 spring:
   application:
     name: splitledger-api
+  autoconfigure:
+    # Authentication is by API token only; without this Boot would create a default user with a
+    # generated password and print it to the log.
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/splitledger}
     username: ${DB_USER:splitledger}
