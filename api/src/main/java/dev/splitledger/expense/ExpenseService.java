@@ -2,6 +2,7 @@ package dev.splitledger.expense;
 
 import dev.splitledger.common.BusinessRuleException;
 import dev.splitledger.common.ConflictException;
+import dev.splitledger.common.IdempotentCreator;
 import dev.splitledger.common.NotFoundException;
 import dev.splitledger.common.Sha256;
 import dev.splitledger.expense.ExpenseDtos.CreateExpenseRequest;
@@ -12,8 +13,6 @@ import dev.splitledger.group.GroupService;
 import dev.splitledger.ledger.EntryKind;
 import dev.splitledger.ledger.LedgerService;
 import dev.splitledger.ledger.Posting;
-import org.hibernate.exception.ConstraintViolationException;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -33,14 +32,16 @@ public class ExpenseService {
     private final ExpenseRepository expenses;
     private final GroupService groupService;
     private final LedgerService ledgerService;
+    private final IdempotentCreator idempotentCreator;
     private final TransactionTemplate writeTx;
     private final TransactionTemplate readTx;
 
     ExpenseService(ExpenseRepository expenses, GroupService groupService, LedgerService ledgerService,
-                   PlatformTransactionManager transactionManager) {
+                   IdempotentCreator idempotentCreator, PlatformTransactionManager transactionManager) {
         this.expenses = expenses;
         this.groupService = groupService;
         this.ledgerService = ledgerService;
+        this.idempotentCreator = idempotentCreator;
         this.writeTx = new TransactionTemplate(transactionManager);
         this.readTx = new TransactionTemplate(transactionManager);
         this.readTx.setReadOnly(true);
@@ -49,28 +50,12 @@ public class ExpenseService {
     public record Creation(ExpenseResponse expense, boolean replayed) {
     }
 
-    /**
-     * Creates an expense and its ledger entries exactly once per (group, idempotency key).
-     * Not annotated with @Transactional: the method needs two separate transactions when two
-     * identical requests race (see the catch block).
-     */
+    /** Creates an expense and its ledger entries exactly once per (group, idempotency key). */
     public Creation create(long groupId, String idempotencyKey, CreateExpenseRequest request) {
         String requestHash = Sha256.hex(request.canonicalForm());
-
-        Optional<Creation> earlier = readTx.execute(status -> findEarlier(groupId, idempotencyKey, requestHash));
-        if (earlier.isPresent()) {
-            return earlier.get();
-        }
-        try {
-            return writeTx.execute(status -> insert(groupId, idempotencyKey, requestHash, request, null));
-        } catch (DataIntegrityViolationException e) {
-            if (!violates(e, IDEMPOTENCY_CONSTRAINT)) {
-                throw e;
-            }
-            // A concurrent request with the same key committed first. Our transaction was rolled
-            // back, so read the winner in a new one and answer as if this were a retry.
-            return readTx.execute(status -> findEarlier(groupId, idempotencyKey, requestHash)).orElseThrow(() -> e);
-        }
+        return idempotentCreator.create(IDEMPOTENCY_CONSTRAINT,
+                () -> findEarlier(groupId, idempotencyKey, requestHash),
+                () -> insert(groupId, idempotencyKey, requestHash, request, null)).value();
     }
 
     /**
@@ -158,14 +143,5 @@ public class ExpenseService {
             postings.add(new Posting(allocation.memberId(), -allocation.amountCents()));
         }
         return postings;
-    }
-
-    private static boolean violates(DataIntegrityViolationException e, String constraintName) {
-        for (Throwable cause = e; cause != null; cause = cause.getCause()) {
-            if (cause instanceof ConstraintViolationException violation) {
-                return constraintName.equalsIgnoreCase(violation.getConstraintName());
-            }
-        }
-        return false;
     }
 }
