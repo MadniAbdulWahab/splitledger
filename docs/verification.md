@@ -154,3 +154,6 @@ plus 2 payment entries = 11 chain entries.
 The first demo run stopped with 422 because of a bug in the script's JSON helper (it took the last
 `id` in a list, so Anna and Ben got the same member id); the API correctly rejected the duplicate
 participant. Fixed in the script.
+
+**CI** (2026-10-21): GitHub Actions run on `main` (commit `5968b32`) green, both jobs.
+Run: https://github.com/MadniAbdulWahab/splitledger/actions/runs/39514641087
