@@ -95,3 +95,7 @@ reversed (`200`, second attempt `409`), balances `+2100 / -2100`, `/verify` vali
 search "Einkauf" found "Einkäufe bei Edeka", "Pizerria" found "Pizzeria Napoli" with
 `reversed: true`. A manual `UPDATE ledger_entry` in psql failed with
 `ledger_entry is append-only: UPDATE is not allowed, write a reversal instead`.
+
+**CI** (2026-10-21): GitHub Actions run on `main` (commit `50175f7`) green, both jobs, including
+the 50,000-row index test on the GitHub runner.
+Run: https://github.com/MadniAbdulWahab/splitledger/actions/runs/39507781059
