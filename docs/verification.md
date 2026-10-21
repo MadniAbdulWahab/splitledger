@@ -157,3 +157,14 @@ participant. Fixed in the script.
 
 **CI** (2026-10-21): GitHub Actions run on `main` (commit `5968b32`) green, both jobs.
 Run: https://github.com/MadniAbdulWahab/splitledger/actions/runs/39514641087
+
+## 2026-10-21: day 4 start, AWS account and cost guard
+
+- New AWS account on the **Free plan** (credits, card not charged; Organizations and IAM Identity
+  Center deliberately not enabled, because either would switch the account to the paid plan).
+- Root user protected with MFA, no root access keys. Everyday work uses the IAM user
+  `madni-admin` (MFA) through `aws login`: short-lived CLI credentials, no access keys on disk.
+- `infra/bootstrap` applied in `eu-central-1`: `Apply complete! Resources: 1 added, 0 changed,
+  0 destroyed.` `aws budgets describe-budgets` shows `splitledger-monthly`, limit 5.0 USD,
+  `IncludeCredit: False` (usage is measured before credits, so the alert also works on the Free plan).
+  Email alerts at 50 % and 100 % actual and 100 % forecast.
