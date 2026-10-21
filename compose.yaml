@@ -23,8 +23,12 @@ services:
     build: ./api
     environment:
       DB_URL: jdbc:postgresql://db:5432/splitledger
-      DB_USER: splitledger
-      DB_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env (see .env.example)}
+      # Same split as on AWS: Flyway migrates as the owner, the application runs as the
+      # least-privilege role splitledger_app (see V7__application_role.sql).
+      SPRING_FLYWAY_USER: splitledger
+      SPRING_FLYWAY_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env (see .env.example)}
+      DB_USER: splitledger_app
+      DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env (see .env.example)}
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:
