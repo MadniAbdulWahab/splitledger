@@ -2,6 +2,19 @@
 
 Dated records of what actually ran. Only what is listed here may be claimed.
 
+Commit ids and image tags below are the ones recorded at the time. On 2026-10-22 the history was
+rewritten to drop one file, which changed every commit id but no code; the cited commits are now:
+
+| Recorded | Now |
+|---|---|
+| `ebe4eb7` | `3f38a8a` |
+| `50175f7` | `34d4949` |
+| `5968b32` | `a573641` |
+| `b11a219` | `de88b63` |
+| `9301c89` | `6b30a0f` |
+| `31acdbe` | `43dbd96` |
+| `28e5dfb` | `46491f4` |
+
 ## 2026-10-20: day 1, ledger core (local)
 
 Environment: Windows 11, Temurin 21.0.8, Docker 28.4, PostgreSQL 16 (`postgres:16-alpine`).
