@@ -13,6 +13,8 @@ import dev.splitledger.group.GroupService;
 import dev.splitledger.ledger.EntryKind;
 import dev.splitledger.ledger.LedgerService;
 import dev.splitledger.ledger.Posting;
+import dev.splitledger.outbox.LedgerEvent.EventType;
+import dev.splitledger.outbox.OutboxService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Propagation;
@@ -33,15 +35,18 @@ public class ExpenseService {
     private final GroupService groupService;
     private final LedgerService ledgerService;
     private final IdempotentCreator idempotentCreator;
+    private final OutboxService outbox;
     private final TransactionTemplate writeTx;
     private final TransactionTemplate readTx;
 
     ExpenseService(ExpenseRepository expenses, GroupService groupService, LedgerService ledgerService,
-                   IdempotentCreator idempotentCreator, PlatformTransactionManager transactionManager) {
+                   IdempotentCreator idempotentCreator, OutboxService outbox,
+                   PlatformTransactionManager transactionManager) {
         this.expenses = expenses;
         this.groupService = groupService;
         this.ledgerService = ledgerService;
         this.idempotentCreator = idempotentCreator;
+        this.outbox = outbox;
         this.writeTx = new TransactionTemplate(transactionManager);
         this.readTx = new TransactionTemplate(transactionManager);
         this.readTx.setReadOnly(true);
@@ -83,7 +88,11 @@ public class ExpenseService {
     public ExpenseResponse reverse(long groupId, long expenseId) {
         return writeTx.execute(status -> {
             Expense expense = findInGroup(groupId, expenseId);
-            ledgerService.reverse(groupId, EntryKind.EXPENSE, expense.getId());
+            List<Posting> reversal = ledgerService.reverse(groupId, EntryKind.EXPENSE, expense.getId()).stream()
+                    .map(entry -> new Posting(entry.getMemberId(), entry.getAmountCents()))
+                    .toList();
+            outbox.record(EventType.EXPENSE_REVERSED, groupId, expense.getId(), expense.getExpenseDate(),
+                    expense.getDescription(), expense.getAmountCents(), reversal);
             return ExpenseResponse.from(expense, true);
         });
     }
@@ -131,7 +140,11 @@ public class ExpenseService {
                 request.description().strip(), request.notes(), request.expenseDate(), request.splitMode(),
                 idempotencyKey, requestHash, bankPurpose, allocations));
 
-        ledgerService.post(groupId, EntryKind.EXPENSE, expense.getId(), postingsFor(expense, allocations));
+        List<Posting> postings = postingsFor(expense, allocations);
+        ledgerService.post(groupId, EntryKind.EXPENSE, expense.getId(), postings);
+        // Same transaction, after the ledger entries (and therefore under the group lock).
+        outbox.record(EventType.EXPENSE_RECORDED, groupId, expense.getId(), expense.getExpenseDate(),
+                expense.getDescription(), expense.getAmountCents(), postings);
         return new Creation(ExpenseResponse.from(expense, false), false);
     }
 

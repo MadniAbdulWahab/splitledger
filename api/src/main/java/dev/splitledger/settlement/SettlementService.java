@@ -9,6 +9,8 @@ import dev.splitledger.group.GroupService;
 import dev.splitledger.ledger.EntryKind;
 import dev.splitledger.ledger.LedgerService;
 import dev.splitledger.ledger.Posting;
+import dev.splitledger.outbox.LedgerEvent.EventType;
+import dev.splitledger.outbox.OutboxService;
 import dev.splitledger.settlement.SettlementDtos.PaymentResponse;
 import dev.splitledger.settlement.SettlementDtos.RecordPaymentRequest;
 import dev.splitledger.settlement.SettlementDtos.SettlementResponse;
@@ -16,6 +18,8 @@ import dev.splitledger.settlement.SettlementDtos.SuggestedPayment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,18 +31,22 @@ import java.util.stream.Collectors;
 public class SettlementService {
 
     static final String IDEMPOTENCY_CONSTRAINT = "payment_idempotency_key_unique";
+    /** The friends live in Germany; a payment at 00:30 belongs to that day, not to the day before in UTC. */
+    static final ZoneId GROUP_TIME_ZONE = ZoneId.of("Europe/Berlin");
 
     private final PaymentRepository payments;
     private final GroupService groupService;
     private final LedgerService ledgerService;
     private final IdempotentCreator idempotentCreator;
+    private final OutboxService outbox;
 
     SettlementService(PaymentRepository payments, GroupService groupService, LedgerService ledgerService,
-                      IdempotentCreator idempotentCreator) {
+                      IdempotentCreator idempotentCreator, OutboxService outbox) {
         this.payments = payments;
         this.groupService = groupService;
         this.ledgerService = ledgerService;
         this.idempotentCreator = idempotentCreator;
+        this.outbox = outbox;
     }
 
     @Transactional(readOnly = true)
@@ -92,9 +100,13 @@ public class SettlementService {
         }
         Payment payment = payments.save(new Payment(groupId, request.fromMemberId(), request.toMemberId(),
                 request.amountCents(), request.note(), idempotencyKey, requestHash));
-        ledgerService.post(groupId, EntryKind.PAYMENT, payment.getId(), List.of(
+        List<Posting> postings = List.of(
                 new Posting(request.fromMemberId(), request.amountCents()),
-                new Posting(request.toMemberId(), -request.amountCents())));
+                new Posting(request.toMemberId(), -request.amountCents()));
+        ledgerService.post(groupId, EntryKind.PAYMENT, payment.getId(), postings);
+        outbox.record(EventType.PAYMENT_RECORDED, groupId, payment.getId(),
+                LocalDate.ofInstant(payment.getCreatedAt(), GROUP_TIME_ZONE),
+                request.note() != null ? request.note() : "Settle-up payment", request.amountCents(), postings);
         return PaymentResponse.from(payment);
     }
 }
