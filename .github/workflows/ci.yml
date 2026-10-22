@@ -31,6 +31,22 @@ jobs:
       # GitHub-hosted runners have Docker, so Testcontainers starts a real PostgreSQL.
       - run: ./mvnw -B verify
 
+  statement-worker:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: statement-worker
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: statement-worker/pom.xml
+      # Kotlin tests, including the S3 store against S3Mock in Testcontainers; builds the Lambda jar.
+      - run: ./mvnw -B verify
+
   docker-image:
     runs-on: ubuntu-24.04
     needs: test
