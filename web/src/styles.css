@@ -51,6 +51,7 @@ body { margin: 0; }
 h1, h2, p { margin: 0; }
 h2 { font-size: 1.05rem; margin-bottom: 12px; }
 .spaced { margin-top: 24px; }
+.spaced-small { margin-top: 12px; }
 
 /* ---------- Controls ---------- */
 input, select, button { font: inherit; }
@@ -140,10 +141,16 @@ button.wide { width: 100%; }
 .tabs { display: flex; gap: 4px; overflow-x: auto; border-bottom: 1px solid var(--line); }
 .tabs button {
   background: none; color: var(--muted); border-radius: 0; border-bottom: 2px solid transparent;
-  padding: 10px 14px; display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 14px; display: inline-flex; align-items: center; gap: 8px;
 }
 .tabs button.active { color: var(--primary); border-bottom-color: var(--primary); }
-.badge { background: var(--primary); color: #fff; border-radius: 999px; font-size: 0.75rem; padding: 0 7px; }
+.tab-icon { position: relative; display: inline-flex; }
+.icon { width: 18px; height: 18px; }
+.badge {
+  position: absolute; top: -6px; right: -10px; min-width: 18px; height: 18px;
+  display: grid; place-items: center; padding: 0 5px;
+  background: var(--negative); color: #fff; border-radius: 999px; font-size: 0.7rem; font-weight: 700;
+}
 
 /* ---------- Lists ---------- */
 .rows { list-style: none; margin: 0; padding: 0; }
@@ -190,7 +197,16 @@ button.wide { width: 100%; }
 .dropzone strong { color: var(--primary); }
 
 /* ---------- Feedback ---------- */
-.alert { padding: 10px 14px; border-radius: var(--radius-small); font-weight: 500; }
+.alert {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 10px 8px 10px 14px; border-radius: var(--radius-small); font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.alert .close {
+  flex: none; background: none; color: inherit; padding: 0 6px; font-size: 1.25rem; line-height: 1.2;
+  opacity: 0.7;
+}
+.alert .close:hover { opacity: 1; }
 .alert.error { background: var(--negative-soft); color: var(--negative); }
 .alert.success { background: var(--positive-soft); color: var(--positive); }
 .empty { display: grid; gap: 4px; justify-items: center; text-align: center; padding: 24px 8px; }
@@ -204,8 +220,22 @@ button.wide { width: 100%; }
   .topbar-actions { flex: 1 1 100%; justify-content: flex-start; flex-wrap: nowrap; }
   .topbar-actions select { flex: 1; min-width: 0; }
   .topbar-actions .avatar { display: none; }
-  .tabs { flex-wrap: wrap; overflow: visible; }
-  .tabs button { padding: 8px 10px; }
+  /* App-style navigation: the tabs become a bar fixed to the bottom edge, icon above label. */
+  .tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 2;
+    display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; overflow: visible;
+    background: var(--surface); border-top: 1px solid var(--line); border-bottom: none;
+    padding: 6px 4px calc(6px + env(safe-area-inset-bottom));
+    box-shadow: 0 -2px 10px rgb(16 24 40 / 6%);
+  }
+  .tabs button {
+    flex-direction: column; gap: 3px; padding: 4px 0; border-bottom: none;
+    font-size: 0.7rem; font-weight: 600;
+  }
+  .tabs button.active { color: var(--primary); }
+  .icon { width: 24px; height: 24px; }
+  /* Room for the bar, so it never hides the last card. */
+  .page { padding-bottom: calc(96px + env(safe-area-inset-bottom)); }
   .page { padding-top: 16px; }
 }
 

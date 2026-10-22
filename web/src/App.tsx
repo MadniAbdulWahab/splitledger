@@ -98,7 +98,7 @@ function Welcome({ onToken }: { onToken: (token: string) => void }) {
                 <button className="primary wide">Sign in</button>
               </form>
             )}
-            {error && <p className="alert error">{error}</p>}
+            {error && <Alert kind="error" text={error} onClose={() => setError(null)} />}
           </>
         )}
       </div>
@@ -166,7 +166,7 @@ function Home({ api, onSignOut }: { api: Api; onSignOut: () => void }) {
       </header>
 
       <main className="page">
-        {error && <p className="alert error">{error}</p>}
+        {error && <Alert kind="error" text={error} onClose={() => setError(null)} />}
         {(showGroups || me.groups.length === 0) && (
           <div className="card">
             <h2>{me.groups.length === 0 ? `Welcome, ${me.displayName}` : 'Groups'}</h2>
@@ -187,14 +187,32 @@ function Home({ api, onSignOut }: { api: Api; onSignOut: () => void }) {
   );
 }
 
-type Tab = 'overview' | 'add' | 'bank' | 'search' | 'members';
+type Tab = 'overview' | 'add' | 'bank' | 'history' | 'members';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
-  { id: 'add', label: 'Add expense' },
-  { id: 'bank', label: 'Bank import' },
-  { id: 'search', label: 'Search' },
+  { id: 'add', label: 'Add' },
+  { id: 'bank', label: 'Bank' },
+  { id: 'history', label: 'History' },
   { id: 'members', label: 'Members' },
 ];
+
+/** Simple line icons (24x24, drawn with currentColor), so no icon library is needed. */
+const TAB_ICONS: Record<Tab, ReactNode> = {
+  overview: <><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9v11h5v-6h4v6h5V9" /></>,
+  add: <><circle cx="12" cy="12" r="9" /><path d="M12 8v8M8 12h8" /></>,
+  bank: <><path d="M3 9.5 12 4l9 5.5" /><path d="M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20.5h18" /></>,
+  history: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3.5 2" /></>,
+  members: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0" /><circle cx="17.5" cy="9" r="2.5" /><path d="M16 14.3a5 5 0 0 1 5.5 5.2" /></>,
+};
+
+function TabIcon({ tab }: { tab: Tab }) {
+  return (
+    <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
+      strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {TAB_ICONS[tab]}
+    </svg>
+  );
+}
 
 function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: number; groupName: string; myMemberId: number }) {
   const [tab, setTab] = useState<Tab>('overview');
@@ -203,7 +221,7 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
   const [payments, setPayments] = useState<SuggestedPayment[]>([]);
   const [candidates, setCandidates] = useState<BankTransaction[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const reload = useCallback(async () => {
     const [m, b, s, c] = await Promise.all([
@@ -223,7 +241,7 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
     try {
       await action();
       await reload();
-      if (success) setNotice(success);
+      if (success) setNotice({ text: success });
       return true;
     } catch (err) {
       setError((err as Error).message);
@@ -250,14 +268,17 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
       <nav className="tabs" role="tablist">
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>
-            {t.label}
-            {t.id === 'bank' && candidates.length > 0 && <span className="badge">{candidates.length}</span>}
+            <span className="tab-icon">
+              <TabIcon tab={t.id} />
+              {t.id === 'bank' && candidates.length > 0 && <span className="badge">{candidates.length}</span>}
+            </span>
+            <span>{t.label}</span>
           </button>
         ))}
       </nav>
 
-      {error && <p className="alert error">{error}</p>}
-      {notice && <p className="alert success">{notice}</p>}
+      {error && <Alert kind="error" text={error} onClose={() => setError(null)} />}
+      {notice && <Alert kind="success" text={notice.text} sticky={notice.sticky} onClose={() => setNotice(null)} />}
 
       {tab === 'overview' && (
         <div className="columns">
@@ -295,7 +316,7 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
               if (file) {
                 void run(async () => {
                   const r = await api.importStatement(groupId, file);
-                  setNotice(`${r.newTransactions} new · ${r.duplicates} already imported · ${r.skippedCount} skipped (incoming or pending)`);
+                  setNotice({ text: `${r.newTransactions} new · ${r.duplicates} already imported · ${r.skippedCount} skipped (incoming or pending)` });
                 });
               }
             }} />
@@ -323,7 +344,7 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
         </div>
       )}
 
-      {tab === 'search' && <Search api={api} groupId={groupId} members={members} />}
+      {tab === 'history' && <History api={api} groupId={groupId} members={members} />}
 
       {tab === 'members' && (
         <div className="columns">
@@ -348,7 +369,8 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
             <InlineForm label="Name" placeholder="e.g. Ben" button="Invite"
               onSubmit={(name) => run(async () => {
                 const added = await api.addMember(groupId, name);
-                setNotice(`Send ${name} this invite code: ${added.inviteCode}`);
+                // Stays until closed: the code has to be copied and sent to the friend.
+                setNotice({ text: `Send ${name} this invite code: ${added.inviteCode}`, sticky: true });
               })} />
             <h2 className="spaced">Your IBAN</h2>
             <p className="muted">Shown to others when they pay you, and used for the GiroCode.</p>
@@ -419,7 +441,7 @@ function PaymentCard({ api, groupId, payment, onPaid }:
             send the transfer, then mark it as paid.</p>
         </div>
       )}
-      {error && <p className="alert error">{error}</p>}
+      {error && <Alert kind="error" text={error} onClose={() => setError(null)} />}
     </div>
   );
 }
@@ -492,28 +514,65 @@ function ExpenseForm({ members, myMemberId, onSubmit, onDone }: {
   );
 }
 
-function Search({ api, groupId, members }: { api: Api; groupId: number; members: Member[] }) {
-  const [hits, setHits] = useState<ExpenseHit[] | null>(null);
+/** The whole history, newest first, 20 at a time; the search box narrows it down. */
+function History({ api, groupId, members }: { api: Api; groupId: number; members: Member[] }) {
+  const [query, setQuery] = useState('');
+  const [activeQuery, setActiveQuery] = useState('');
+  const [items, setItems] = useState<ExpenseHit[] | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const names = new Map(members.map((m) => [m.id, m.displayName]));
+
+  const load = useCallback(async (q: string, after?: string) => {
+    setError(null);
+    try {
+      const page = await api.search(groupId, q, after);
+      setItems((current) => (after && current ? [...current, ...page.items] : page.items));
+      setCursor(page.nextCursor);
+      setActiveQuery(q);
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }, [api, groupId]);
+
+  useEffect(() => { void load(''); }, [load]);
 
   return (
     <div className="card">
-      <h2>Search the history</h2>
-      <InlineForm label="Search" placeholder="Einkauf, Pizza, Lidl, Berlin…" button="Search"
-        onSubmit={(q) => api.search(groupId, q).then((r) => setHits(r.items))} />
-      {hits !== null && hits.length === 0 && <Empty title="Nothing found" text="Try another word; small typos are fine." />}
-      {hits && hits.length > 0 && (
+      <h2>History</h2>
+      <form className="inline" onSubmit={(e) => { e.preventDefault(); void load(query.trim()); }}>
+        <input aria-label="Search" placeholder="Search: Einkauf, Pizza, Lidl, Berlin…" value={query}
+          onChange={(e) => setQuery(e.target.value)} />
+        <button className="primary">Search</button>
+        {activeQuery && (
+          <button type="button" className="ghost" onClick={() => { setQuery(''); void load(''); }}>Clear</button>
+        )}
+      </form>
+      {activeQuery && items && <p className="muted small spaced-small">Results for “{activeQuery}”</p>}
+      {error && <Alert kind="error" text={error} onClose={() => setError(null)} />}
+      {items === null && <p className="muted spaced-small">Loading…</p>}
+      {items !== null && items.length === 0 && (
+        activeQuery
+          ? <Empty title="Nothing found" text="Try another word; small typos are fine." />
+          : <Empty title="No expenses yet" text="Add one or import your bank statement." />
+      )}
+      {items && items.length > 0 && (
         <ul className="rows">
-          {hits.map((h) => (
+          {items.map((h) => (
             <li key={h.id} className={h.reversed ? 'reversed' : ''}>
               <div className="grow">
                 <strong>{h.description}</strong>
-                <span className="muted small">{formatDate(h.expenseDate)} · paid by {names.get(h.payerId) ?? '?'}{h.reversed ? ' · reversed' : ''}</span>
+                <span className="muted small">
+                  {formatDate(h.expenseDate)} · paid by {names.get(h.payerId) ?? '?'}{h.reversed ? ' · reversed' : ''}
+                </span>
               </div>
               <span className="amount">{formatCents(h.amountCents)}</span>
             </li>
           ))}
         </ul>
+      )}
+      {cursor && (
+        <button className="ghost wide spaced-small" onClick={() => void load(activeQuery, cursor)}>Load more</button>
       )}
     </div>
   );
@@ -551,6 +610,27 @@ function InlineForm({ label, placeholder, button, onSubmit }:
       <input aria-label={label} placeholder={placeholder} value={value} onChange={(e) => setValue(e.target.value)} required />
       <button className="primary">{button}</button>
     </form>
+  );
+}
+
+interface Notice { text: string; sticky?: boolean }
+
+/** Success messages disappear after five seconds unless sticky; errors stay until they are closed. */
+function Alert({ kind, text, sticky, onClose }:
+  { kind: 'success' | 'error'; text: string; sticky?: boolean; onClose: () => void }) {
+  useEffect(() => {
+    if (kind !== 'success' || sticky) {
+      return undefined;
+    }
+    const timer = setTimeout(onClose, 5000);
+    return () => clearTimeout(timer);
+  }, [kind, sticky, text, onClose]);
+
+  return (
+    <div className={`alert ${kind}`} role={kind === 'error' ? 'alert' : 'status'}>
+      <span>{text}</span>
+      <button type="button" className="close" aria-label="Dismiss" onClick={onClose}>×</button>
+    </div>
   );
 }
 

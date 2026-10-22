@@ -70,3 +70,35 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker build --file api/Dockerfile --tag splitledger-api:ci .
+
+  # The web page in a real browser against the real stack (API, PostgreSQL, built page) from
+  # docker compose. GitHub's Ubuntu runners have Chrome installed; playwright-core drives it.
+  e2e:
+    runs-on: ubuntu-24.04
+    needs: [test, web]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Start the stack
+        run: |
+          printf 'DB_PASSWORD=%s
+APP_DB_PASSWORD=%s
+' "$(openssl rand -hex 16)" "$(openssl rand -hex 16)" > .env
+          docker compose up --build --detach --wait
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+        working-directory: web
+      - run: npm run e2e -- http://localhost:8080
+        working-directory: web
+        env:
+          SCREENSHOTS: ${{ github.workspace }}/e2e-screenshots
+      - if: failure()
+        run: docker compose logs api
+      - if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-screenshots
+          path: e2e-screenshots

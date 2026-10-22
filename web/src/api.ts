@@ -52,8 +52,10 @@ export class Api {
       { fromMemberId: p.fromMemberId, toMemberId: p.toMemberId, amountCents: p.amountCents },
       { 'Idempotency-Key': newIdempotencyKey() });
 
-  search = (g: number, q: string) =>
-    this.json<{ items: ExpenseHit[] }>('GET', `/groups/${g}/expenses/search?q=${encodeURIComponent(q)}&limit=20`);
+  /** Without q: the whole history, newest first. Pass nextCursor to get the following page. */
+  search = (g: number, q: string, cursor?: string) =>
+    this.json<{ items: ExpenseHit[]; nextCursor: string | null }>('GET',
+      `/groups/${g}/expenses/search?limit=20&q=${encodeURIComponent(q)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
   candidates = (g: number) => this.json<BankTransaction[]>('GET', `/groups/${g}/bank-transactions`);
   confirm = (g: number, id: number, memberIds: number[]) =>
     this.json('POST', `/groups/${g}/bank-transactions/${id}/confirmation`,
