@@ -306,3 +306,44 @@ alarms OK; the "failed or slow requests" table lists the first two requests afte
 (`POST /users` 1131 ms, `POST /groups` 1006 ms), the JVM warming up on 0.25 vCPU. The two alarm
 emails arrived (ALARM at 16:32:12 UTC with the test reason, OK at 16:33:55 UTC); they are not
 committed because they contain the topic's unsubscribe link.
+
+## 2026-10-22: day 6, outbox, SQS, Kotlin Lambda, S3 statements
+
+**Tests:** API 131 tests, 0 failures (`OutboxTest`: one event per expense, reversal and payment
+with its postings, none for a rejected request, publisher stops at the first SQS failure and marks
+only what was sent; `OutboxPublisherSqsTest`: real delivery to an ElasticMQ FIFO queue, ordered,
+message group per expense group, nothing sent twice; app-role checks for `outbox_event`).
+Statement worker (Kotlin) 12 tests, 0 failures (`MonthlyStatementTest`, `StatementHandlerTest`
+including the rest-of-batch retry after a failure, `S3StatementStoreTest` against S3Mock). The
+first run found an error in the test data (an odd amount split into two equal halves, so the
+postings did not sum to zero); the zero-sum invariant test caught it.
+
+**Terraform:** `Apply complete! Resources: 15 added, 1 changed, 1 destroyed.` (FIFO queue and DLQ,
+redrive allow policy, S3 bucket with public access block, ownership controls and encryption,
+Lambda with log group, role and event source mapping, API task role policy, DLQ alarm; dashboard
+updated; new task definition revision with the queue URL).
+
+**Deployment** through the GitHub workflow: commit `31acdbe`, success in 6 min 48 s, service on
+task definition revision 6 with image `31acdbe7a900` and `SPLITLEDGER_OUTBOX_QUEUE_URL` set; the
+API log shows `Successfully applied 1 migration` (V8). `scripts/demo.sh` passed (group 4).
+
+**Events end to end:** the Lambda log shows four messages `APPLIED` (two confirmed bank payments,
+the pizza, the settle-up payment); queue and DLQ empty afterwards. S3:
+
+```
+statements/group-4/2026-03.json   732 bytes
+statements/group-4/2026-10.json   725 bytes
+```
+
+March statement: `expenseCount 3`, `expensesCents 11357` (54.12 + 23.45 + 36.00 EUR); Anna
+`paidCents 7757`, `shareCents 5679`, `netChangeCents 2078`; Ben `paidCents 3600`, `shareCents
+5678`, `netChangeCents -2078`, which equals the balances before the settle-up. October statement:
+`paymentCount 1`, `paymentsCents 2078`. Lambda timings: cold start `Init Duration 851 ms`, first
+invocation 2468 ms, then 109-155 ms; `Max Memory Used 171 MB` of 512.
+
+**Dead-letter queue and alarm:** an invalid message sent by hand to the queue (own message group
+`dlq-test`, 17:20:11 UTC) failed three times (`MissingFieldException` in the worker log), was in the
+DLQ at 17:29:17, and `splitledger-ledger-events-dlq` went to ALARM at 17:31:03 with
+`Successfully executed action ...:splitledger-alarms`. The DLQ held only that message
+(`{"note":"deliberately invalid event to test the dead-letter queue"}`) and was purged afterwards.
+The alarm returned to OK (about 17:38 UTC) after the purge.

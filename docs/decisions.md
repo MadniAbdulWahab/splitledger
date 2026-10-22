@@ -344,3 +344,55 @@ for Splitwise Pro. `deploy/free-host/` runs the same image with PostgreSQL and C
 travel over HTTPS, the API port is not published, actuator endpoints are not served publicly, and
 registration requires a code. AWS remains the place to show the cloud skills: deploy, verify,
 destroy, and recreate from Terraform for a demo.
+
+## 26. Transactional outbox instead of publishing to SQS directly (2026-10-22)
+
+Sending to SQS inside the request has two failure modes: the message is sent but the database
+transaction rolls back (an event for something that never happened), or the transaction commits
+but SQS is unreachable (a lost event). The outbox avoids both: the event is a row written in the
+same transaction as the expense, reversal or payment, so it exists exactly when the change
+committed. A scheduled publisher sends unpublished rows and marks them; delivery is at-least-once.
+
+- **Order per group:** the event is written after the ledger entries, while the transaction holds
+  the group's row lock (decision 9). Within a group, outbox ids are therefore assigned in commit
+  order, and a smaller id can never commit after a larger one has been published. Without the lock
+  this is the classic outbox trap: id 10 commits after id 11 was already sent.
+- **One publisher, one message at a time:** a PostgreSQL advisory lock lets only one publisher run
+  (several API tasks would otherwise interleave), and messages are sent one by one, stopping at the
+  first failure, so nothing overtakes a waiting event. SendMessageBatch could partially fail out of
+  order. The volume here makes single sends cheap.
+- **Duplicates** (crash between "SQS accepted" and "row marked"): SQS FIFO drops a repeated
+  deduplication id (the outbox id) within five minutes, and the worker skips events it already applied.
+- Publishing switches on only when a queue URL is configured; locally and in most tests events are
+  written but not sent.
+
+## 27. FIFO queue with message group = expense group, idempotent worker (2026-10-22)
+
+A standard queue delivers in any order and to parallel consumers, so two events of one group could
+update the same monthly statement at the same time (lost update) or in the wrong order. With a FIFO
+queue and `MessageGroupId = group-<id>`, SQS delivers each group's events in order and hands them to
+one invocation at a time; different groups still run in parallel. The worker's read-modify-write of
+the S3 object needs no lock for that reason.
+
+Each statement stores the highest event id it has applied; an event with a smaller or equal id is a
+repeat and is skipped. Partial batch responses report only failed messages, and after the first
+failure in a batch the remaining messages are reported failed without processing, because they may
+belong to the same group. After three failed receives a message moves to the FIFO dead-letter queue,
+which raises an alarm. Visibility timeout 180 s = 6 x the 30 s function timeout, as AWS recommends.
+
+## 28. Kotlin Lambda for the statements; emulators instead of LocalStack in tests (2026-10-22)
+
+The worker is small, event-driven and short-lived: a good fit for Lambda (decision 21 explains why
+the API is not). It is written in Kotlin with kotlinx.serialization: data classes for the event
+and statement, and the aggregation as a pure function (`MonthlyStatement.apply`) that is
+unit-tested without AWS. Runtime `java21` on arm64 (Graviton, cheaper), the AWS SDK with the JDK's
+HTTP client and `TieredStopAtLevel=1` for a shorter cold start. Measured on AWS: 0.85 s init plus
+2.5 s for the first invocation, then 0.11-0.15 s; 170 MB used.
+
+The spec suggested LocalStack for SQS and S3 tests. Since March 2026 LocalStack needs an account
+token even on its free plan, which a public CI should not depend on. The tests use ElasticMQ (SQS,
+including FIFO) and Adobe S3Mock instead: open source, no account, started by Testcontainers.
+
+The Lambda code is deployed by Terraform from the locally built jar (`source_code_hash` detects
+changes), while the API image goes through the GitHub pipeline. A second deploy step for the worker
+would follow the same pattern (role allowed `lambda:UpdateFunctionCode` on this one function).
