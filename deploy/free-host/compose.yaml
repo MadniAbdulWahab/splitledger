@@ -23,7 +23,9 @@ services:
       retries: 10
 
   api:
-    build: ../../api
+    build:
+      context: ../..
+      dockerfile: api/Dockerfile
     restart: unless-stopped
     environment:
       DB_URL: jdbc:postgresql://db:5432/splitledger

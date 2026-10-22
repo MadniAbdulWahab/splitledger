@@ -29,6 +29,20 @@ class SecurityApiTest extends IntegrationTest {
     }
 
     @Test
+    void webPageIsPublicButTheApiIsNotAndEveryResponseCarriesTheContentSecurityPolicy() {
+        // The built page is only in the Docker image; here the request must at least not need a token.
+        assertThat(anonymous().get().uri("/").exchange().getResponse().getStatus()).isNotEqualTo(401);
+        assertThat(anonymous().get().uri("/assets/app.js").exchange().getResponse().getStatus()).isNotEqualTo(401);
+        assertThat(anonymous().get().uri("/me")).hasStatus(401);
+        // A path that tries to climb out of the public folder never reaches a controller: Spring
+        // Security's firewall rejects it before any rule is applied.
+        assertThat(anonymous().get().uri("/assets/../me")).hasStatus(400);
+
+        String csp = mvc.get().uri("/me").exchange().getResponse().getHeader("Content-Security-Policy");
+        assertThat(csp).contains("script-src 'self'").contains("frame-ancestors 'none'").doesNotContain("unsafe-eval");
+    }
+
+    @Test
     void registrationReturnsATokenThatWorksOnce() {
         MvcTestResult registration = anonymous().post().uri("/users")
                 .contentType(MediaType.APPLICATION_JSON)

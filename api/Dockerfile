@@ -1,13 +1,25 @@
 # syntax=docker/dockerfile:1
+# Build context: the repository root, so the web page can be built in:
+#   docker build --file api/Dockerfile .
+
+# Web stage: builds the React page; only its static files are kept.
+FROM node:24-alpine AS web
+WORKDIR /web
+COPY web/package.json web/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci --no-audit --no-fund
+COPY web/ ./
+RUN npm run build
 
 # Build stage: full JDK and Maven, thrown away after the build.
 FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /build
 # Copy only the build files first, so the dependency layer is cached until pom.xml changes.
-COPY .mvn/ .mvn/
-COPY mvnw pom.xml ./
+COPY api/.mvn/ .mvn/
+COPY api/mvnw api/pom.xml ./
 RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -q dependency:go-offline
-COPY src/ src/
+COPY api/src/ src/
+# Spring Boot serves the page from the same origin as the API: no CORS, one deployment.
+COPY --from=web /web/dist/ src/main/resources/static/
 # Tests run in CI with Testcontainers; a Docker build cannot start containers itself.
 RUN --mount=type=cache,target=/root/.m2 ./mvnw -B -q package -DskipTests \
     && cp target/splitledger-api-*.jar application.jar \

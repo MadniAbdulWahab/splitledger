@@ -71,7 +71,7 @@ jobs:
           if aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$tag" > /dev/null 2>&1; then
             echo "Image $tag already in ECR"
           else
-            docker build --tag "$image" api
+            docker build --file api/Dockerfile --tag "$image" .
             docker push "$image"
           fi
           echo "image=$image" >> "$GITHUB_OUTPUT"

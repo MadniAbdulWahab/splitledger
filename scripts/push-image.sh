@@ -13,8 +13,8 @@ native_path() { if command -v cygpath > /dev/null; then cygpath -m "$1"; else pr
 INFRA="$(native_path "$ROOT/infra/app")"
 REGION="${AWS_REGION:-eu-central-1}"
 
-if [ -n "$(git -C "$ROOT" status --porcelain -- api)" ]; then
-  echo "api/ has uncommitted changes; commit them first so the image tag matches the code." >&2
+if [ -n "$(git -C "$ROOT" status --porcelain -- api web)" ]; then
+  echo "api/ or web/ has uncommitted changes; commit them first so the image tag matches the code." >&2
   exit 1
 fi
 
@@ -23,7 +23,7 @@ TAG="$(git -C "$ROOT" rev-parse --short=12 HEAD)"
 REGISTRY="${REPOSITORY%%/*}"
 
 # Fargate runs X86_64 (see service.tf); build for it even on an ARM laptop.
-docker build --platform linux/amd64 --tag "$REPOSITORY:$TAG" "$(native_path "$ROOT/api")" >&2
+docker build --platform linux/amd64 --file "$(native_path "$ROOT/api/Dockerfile")" --tag "$REPOSITORY:$TAG"   "$(native_path "$ROOT")" >&2
 
 # The ECR password is a 12-hour token derived from the current AWS login. It is too long for the
 # Windows Credential Manager ("The stub received bad data"), so login and push use a throwaway
