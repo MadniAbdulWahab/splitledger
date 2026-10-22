@@ -34,16 +34,23 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Waits while CI is still running (so a deployment can be started right after a push) and
+      # asks again when the run is not listed yet: GitHub's filtered run lists can lag a little.
       - name: Only deploy commits that passed CI
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          conclusion="$(gh run list --workflow ci.yml --commit "$GITHUB_SHA" --status completed \
-            --json conclusion --jq '.[0].conclusion')"
-          if [ "$conclusion" != "success" ]; then
-            echo "::error::CI has not passed for $GITHUB_SHA (result: ${conclusion:-no completed run})"
-            exit 1
-          fi
+          for attempt in $(seq 1 45); do
+            result="$(gh run list --workflow ci.yml --commit "$GITHUB_SHA" --json status,conclusion \
+              --jq '.[0] | "\(.status) \(.conclusion)"')"
+            case "$result" in
+              "completed success") echo "CI passed for $GITHUB_SHA"; exit 0 ;;
+              "completed "*) echo "::error::CI did not pass for $GITHUB_SHA ($result)"; exit 1 ;;
+              *) echo "CI for $GITHUB_SHA: ${result:-not listed yet}; waiting"; sleep 20 ;;
+            esac
+          done
+          echo "::error::No finished CI run for $GITHUB_SHA after 15 minutes"
+          exit 1
 
       - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
