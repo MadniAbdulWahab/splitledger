@@ -21,8 +21,29 @@ REGISTRY="${REPOSITORY%%/*}"
 # Fargate runs X86_64 (see service.tf); build for it even on an ARM laptop.
 docker build --platform linux/amd64 --tag "$REPOSITORY:$TAG" "$ROOT/api" >&2
 
-# The ECR password is a 12-hour token derived from the current AWS login, not a stored secret.
-aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$REGISTRY" >&2
-docker push "$REPOSITORY:$TAG" >&2
+# The ECR password is a 12-hour token derived from the current AWS login. It is too long for the
+# Windows Credential Manager ("The stub received bad data"), so login and push use a throwaway
+# Docker config that is deleted when the script ends. DOCKER_HOST keeps the current engine.
+# docker.exe on Windows (Git Bash's "docker" is a wrapper that needs the PATH), docker elsewhere.
+DOCKER="$(command -v docker.exe || command -v docker)"
+DOCKER_HOST="$("$DOCKER" context inspect --format '{{.Endpoints.docker.Host}}')"
+DOCKER_CONFIG="$(mktemp -d)"
+export DOCKER_HOST DOCKER_CONFIG
+trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+
+# On Windows, Docker picks the Credential Manager helper whenever docker-credential-wincred is on
+# the PATH, even with an empty config. Hiding Docker's own folder from the PATH (and calling docker
+# by its full path) makes it store the token in the throwaway config file instead.
+PUSH_PATH="$PATH"
+case "$(uname -s)" in
+  MINGW* | MSYS* | CYGWIN*)
+    DOCKER_DIR="$(dirname "$DOCKER")"
+    PUSH_PATH="$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$DOCKER_DIR" | paste -sd ':')"
+    ;;
+esac
+
+aws ecr get-login-password --region "$REGION" \
+  | PATH="$PUSH_PATH" "$DOCKER" login --username AWS --password-stdin "$REGISTRY" >&2
+PATH="$PUSH_PATH" "$DOCKER" push "$REPOSITORY:$TAG" >&2
 
 echo "$TAG"
