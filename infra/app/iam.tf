@@ -1,6 +1,7 @@
 # Two roles, as ECS separates them:
 #   execution role: used by ECS itself to start the task (pull the image, write logs, read secrets)
-#   task role:      used by the application code; it has no AWS permissions yet (SQS/S3 on day 6)
+#   task role:      used by the application code; it may only send to the ledger events queue
+#                   (policy in events.tf)
 
 data "aws_caller_identity" "current" {}
 

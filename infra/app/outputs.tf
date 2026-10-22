@@ -37,3 +37,8 @@ output "registration_code_parameter" {
   description = "SSM parameter holding the registration code (read with --with-decryption)"
   value       = aws_ssm_parameter.registration_code.name
 }
+
+output "statement_bucket" {
+  description = "S3 bucket with the monthly group statements (statements/group-<id>/<yyyy-MM>.json)"
+  value       = aws_s3_bucket.statements.id
+}

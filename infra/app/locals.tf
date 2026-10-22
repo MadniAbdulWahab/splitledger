@@ -15,4 +15,8 @@ locals {
 
   # Custom metrics derived from the API's JSON request log lines (monitoring.tf).
   metrics_namespace = "SplitLedger"
+
+  # Statement worker (events.tf): the jar built by `./mvnw package` in statement-worker/.
+  worker_jar             = "${path.module}/../../statement-worker/target/statement-worker.jar"
+  worker_timeout_seconds = 30
 }

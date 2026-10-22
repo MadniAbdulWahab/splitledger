@@ -40,6 +40,9 @@ resource "aws_ecs_task_definition" "api" {
       { name = "SPRING_FLYWAY_USER", value = local.db_owner },
       # JSON log lines (Elastic Common Schema format) for CloudWatch metric filters and queries.
       { name = "LOGGING_STRUCTURED_FORMAT_CONSOLE", value = "ecs" },
+      # Switches the outbox publisher on (events.tf); credentials come from the task role.
+      { name = "SPLITLEDGER_OUTBOX_QUEUE_URL", value = aws_sqs_queue.ledger_events.url },
+      { name = "SPLITLEDGER_OUTBOX_REGION", value = var.aws_region },
     ]
 
     # ECS reads these from SSM when the task starts; they never appear in the task definition.

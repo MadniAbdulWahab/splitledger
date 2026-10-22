@@ -193,13 +193,51 @@ resource "aws_cloudwatch_dashboard" "main" {
             aws_cloudwatch_metric_alarm.server_error_rate.arn,
             aws_cloudwatch_metric_alarm.api_cpu.arn,
             aws_cloudwatch_metric_alarm.api_memory.arn,
+            aws_cloudwatch_metric_alarm.ledger_events_dlq.arn,
+          ]
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 12
+        width  = 12
+        height = 6
+        properties = {
+          title  = "Ledger events: queue and dead-letter queue"
+          region = var.aws_region
+          view   = "timeSeries"
+          stat   = "Sum"
+          period = 300
+          metrics = [
+            ["AWS/SQS", "NumberOfMessagesSent", "QueueName", aws_sqs_queue.ledger_events.name, { label = "sent by the API" }],
+            ["AWS/SQS", "NumberOfMessagesDeleted", "QueueName", aws_sqs_queue.ledger_events.name, { label = "processed by the worker" }],
+            ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", aws_sqs_queue.ledger_events_dlq.name, { label = "in DLQ", stat = "Maximum", color = "#d62728" }],
+          ]
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 12
+        width  = 12
+        height = 6
+        properties = {
+          title  = "Statement worker (Lambda)"
+          region = var.aws_region
+          view   = "timeSeries"
+          period = 300
+          metrics = [
+            ["AWS/Lambda", "Invocations", "FunctionName", aws_lambda_function.statement_worker.function_name, { stat = "Sum" }],
+            ["AWS/Lambda", "Errors", "FunctionName", aws_lambda_function.statement_worker.function_name, { stat = "Sum", color = "#d62728" }],
+            ["AWS/Lambda", "Duration", "FunctionName", aws_lambda_function.statement_worker.function_name, { stat = "Maximum", yAxis = "right" }],
           ]
         }
       },
       {
         type   = "log"
         x      = 0
-        y      = 12
+        y      = 18
         width  = 24
         height = 6
         properties = {
