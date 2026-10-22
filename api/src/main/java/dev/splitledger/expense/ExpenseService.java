@@ -134,6 +134,10 @@ public class ExpenseService {
                 throw new BusinessRuleException("Participant " + p.memberId() + " is not a member of group " + groupId);
             }
         }
+        // The payer's credit and own share would cancel out: no balance changes, nothing is shared.
+        if (participants.stream().allMatch(p -> p.memberId() == request.payerId())) {
+            throw new BusinessRuleException("Only the payer takes part, so nothing is shared; add at least one other participant");
+        }
 
         List<Allocation> allocations = SplitCalculator.split(request.amountCents(), request.splitMode(), participants);
         Expense expense = expenses.save(new Expense(groupId, request.payerId(), request.amountCents(),

@@ -88,9 +88,9 @@ class OutboxTest extends IntegrationTest {
     /** SQS fails on the second message: only the first is marked, the rest waits for the next run. */
     @Test
     void publisherStopsAtTheFirstFailureAndMarksOnlyWhatWasSent() {
-        createExpense(groupId, anna, 100, "First", anna);
-        createExpense(groupId, anna, 200, "Second", anna);
-        createExpense(groupId, anna, 300, "Third", anna);
+        createExpense(groupId, anna, 100, "First", anna, ben);
+        createExpense(groupId, anna, 200, "Second", anna, ben);
+        createExpense(groupId, anna, 300, "Third", anna, ben);
         jdbc.update("update outbox_event set published_at = now() where group_id <> ? and published_at is null", groupId);
 
         SqsClient sqs = mock(SqsClient.class);

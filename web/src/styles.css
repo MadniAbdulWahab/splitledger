@@ -126,7 +126,7 @@ button.wide { width: 100%; }
 .auth { display: grid; gap: 16px; }
 .segmented { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border-radius: var(--radius-small); padding: 4px; }
 .segmented button { background: transparent; color: var(--muted); }
-.segmented button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+.segmented button.active { background: var(--primary-soft); color: var(--primary); box-shadow: var(--shadow); }
 .token { display: block; word-break: break-all; padding: 12px; border-radius: var(--radius-small); background: var(--surface-2); font-size: 0.85rem; }
 
 /* ---------- Summary and tabs ---------- */
@@ -244,3 +244,32 @@ button.wide { width: 100%; }
   .summary button { width: 100%; }
   .payment-line { flex-wrap: wrap; }
 }
+
+/* ---------- Balances: bars from a centre line ---------- */
+.balance-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.bar.diverging { position: relative; }
+.bar.diverging::after {
+  content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 2px;
+  background: var(--muted); opacity: 0.35;
+}
+.bar.diverging span { position: absolute; top: 0; bottom: 0; }
+.bar.diverging .positive { left: 50%; border-radius: 0 999px 999px 0; }
+.bar.diverging .negative { right: 50%; border-radius: 999px 0 0 999px; }
+
+/* ---------- Expense form: split modes ---------- */
+.stack-small { display: grid; gap: 8px; }
+.segmented.three { grid-template-columns: repeat(3, 1fr); }
+.segmented.compact { display: inline-grid; grid-template-columns: auto auto; }
+.segmented.compact button { padding: 6px 12px; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.card-head h2 { margin: 0; }
+.split-rows li { padding: 8px 0; }
+.amount-input { width: 120px; text-align: right; font-variant-numeric: tabular-nums; }
+.share-preview { min-width: 84px; text-align: right; }
+.assigned {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px; border-radius: var(--radius-small); background: var(--surface-2); font-weight: 600;
+}
+.assigned.done { background: var(--positive-soft); color: var(--positive); }
+.assigned.over { background: var(--negative-soft); color: var(--negative); }
+.subhead { margin-top: 20px; color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; }

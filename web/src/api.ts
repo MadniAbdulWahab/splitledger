@@ -19,6 +19,9 @@ export interface BankTransaction {
   id: number; bookingDate: string; amountCents: number; counterpartyName: string | null;
   purpose: string | null; status: string;
 }
+export interface PaymentRecord {
+  id: number; fromMemberId: number; toMemberId: number; amountCents: number; note: string | null; createdAt: string;
+}
 export interface ImportReport {
   rowsRead: number; newTransactions: number; duplicates: number; skippedCount: number;
   skipped: { line: number; reason: string }[];
@@ -47,6 +50,8 @@ export class Api {
   // Every create sends a fresh Idempotency-Key, so a retried click never books twice.
   addExpense = (g: number, body: unknown) =>
     this.json('POST', `/groups/${g}/expenses`, body, { 'Idempotency-Key': newIdempotencyKey() });
+  /** Recorded settle-up payments, newest first. */
+  payments = (g: number) => this.json<PaymentRecord[]>('GET', `/groups/${g}/payments`);
   recordPayment = (g: number, p: SuggestedPayment) =>
     this.json('POST', `/groups/${g}/payments`,
       { fromMemberId: p.fromMemberId, toMemberId: p.toMemberId, amountCents: p.amountCents },

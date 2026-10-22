@@ -39,7 +39,7 @@ class AppRolePrivilegesTest extends IntegrationTest {
     void createData() {
         groupId = createGroup("Privileges");
         long anna = myMemberId(groupId);
-        createExpense(groupId, anna, 1000, "Something", anna);
+        createExpense(groupId, anna, 1000, "Something", anna, addMember(groupId, "Ben"));
     }
 
     @ParameterizedTest

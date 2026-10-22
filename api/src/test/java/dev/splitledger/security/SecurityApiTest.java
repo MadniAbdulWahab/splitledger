@@ -62,7 +62,7 @@ class SecurityApiTest extends IntegrationTest {
     void strangersCannotReachAnyGroupEndpoint() {
         long groupId = createGroup("Private");
         long anna = myMemberId(groupId);
-        long expenseId = createExpense(groupId, anna, 1000, "Secret dinner", anna);
+        long expenseId = createExpense(groupId, anna, 1000, "Secret dinner", anna, addMember(groupId, "Ben"));
         MockMvcTester stranger = as(userService.register("Eve").token());
 
         String[] getPaths = {"/groups/{g}", "/groups/{g}/members", "/groups/{g}/balances", "/groups/{g}/verify",

@@ -62,14 +62,46 @@ async function walkthrough(name, options) {
   await saved.waitFor({ state: 'detached', timeout: 8000 });
   await shot('2-members');
 
-  // An expense only Ben shares: Ben owes Anna 42,00 €.
+  // An expense only the payer shares is pointless: the form refuses it and says why.
   await page.getByRole('tab', { name: 'Add' }).click();
   await page.getByLabel('What for?').fill('Groceries');
   await page.getByLabel('Amount (€)').fill('42,00');
-  await page.getByRole('button', { name: 'Anna Beispiel', exact: true }).click();
+  await page.getByRole('button', { name: 'Ben shares' }).click();
+  await page.getByText('Only Anna Beispiel takes part').waitFor();
+  check(await page.getByRole('button', { name: /^Add 42,00/ }).isDisabled(), 'payer-only expense cannot be saved');
+
+  // Equally between Ben only: Ben owes Anna 42,00 €. The preview shows each share.
+  await page.getByRole('button', { name: 'Ben shares' }).click();
+  await page.getByRole('button', { name: 'Anna Beispiel shares' }).click();
+  check((await page.locator('.split-rows li', { hasText: 'Ben' }).innerText()).includes('42,00'), 'preview shows Ben pays 42,00');
   await shot('3-add');
   await page.getByRole('button', { name: /^Add 42,00/ }).click();
   await page.getByText('You get back 42,00 €').waitFor();
+
+  // Exact amounts: Anna 10,00 of 30,00; "Split the rest" gives Ben the missing 20,00.
+  await page.getByRole('tab', { name: 'Add' }).click();
+  await page.getByLabel('What for?').fill('Concert tickets');
+  await page.getByLabel('Amount (€)').fill('30,00');
+  await page.getByRole('button', { name: 'Exact amounts' }).click();
+  await page.getByLabel('Amount for Anna Beispiel').fill('10');
+  await page.getByText('10,00 € of 30,00 € assigned · 20,00 € left').waitFor();
+  check(await page.getByRole('button', { name: /^Add 30,00/ }).isDisabled(), 'cannot save before the amounts add up');
+  await page.getByRole('button', { name: 'Split the rest' }).click();
+  check(await page.getByLabel('Amount for Ben').inputValue() === '20,00', 'the rest goes to Ben');
+  await page.getByText('30,00 € of 30,00 € assigned').waitFor();
+  await shot('3b-exact');
+  await page.getByRole('button', { name: /^Add 30,00/ }).click();
+  await page.getByText('You get back 62,00 €').waitFor();
+
+  // Bars grow from the centre: Anna's (owed money) to the right, Ben's (owes) to the left.
+  const centreOf = async (selector) => {
+    const bar = await page.locator(selector).locator('xpath=..').boundingBox();
+    const fill = await page.locator(selector).boundingBox();
+    return { centre: bar.x + bar.width / 2, left: fill.x, right: fill.x + fill.width };
+  };
+  const owed = await centreOf('.bar.diverging .positive');
+  const owes = await centreOf('.bar.diverging .negative');
+  check(owed.left >= owed.centre - 1 && owes.right <= owes.centre + 1, 'credit bar right of centre, debt bar left of it');
 
   // GiroCode for the suggested payment.
   await page.getByRole('button', { name: 'Show GiroCode' }).click();
@@ -77,6 +109,13 @@ async function walkthrough(name, options) {
   await qr.waitFor();
   check(await qr.evaluate((img) => img.complete && img.naturalWidth > 100), 'GiroCode image loaded');
   await shot('4-overview');
+
+  // Ben pays; the payment shows up under the suggestions and in the history.
+  await page.getByRole('button', { name: 'Mark as paid' }).click();
+  await page.getByText('You are all settled').waitFor();
+  await page.getByText('Recent payments').waitFor();
+  check((await page.locator('.rows li', { hasText: 'Ben paid Anna Beispiel' }).first().innerText()).includes('62,00'),
+    'recent payments list Ben paid 62,00');
 
   // Bank import: 8 outgoing payments become private candidates; share one.
   await page.getByRole('tab', { name: /Bank/ }).click();
@@ -89,8 +128,8 @@ async function walkthrough(name, options) {
   // History shows everything without searching; search narrows it, Clear brings it back.
   await page.getByRole('tab', { name: 'History' }).click();
   const rows = page.locator('.rows li');
-  await rows.nth(1).waitFor();
-  check(await rows.count() === 2, 'history lists both expenses without a search');
+  await rows.nth(2).waitFor();
+  check(await rows.count() === 3, 'history lists all three expenses without a search');
   await page.getByLabel('Search').fill('Edeca'); // one wrong letter
   await page.getByRole('button', { name: 'Search' }).click();
   await page.getByText('Results for “Edeca”').waitFor();
@@ -98,7 +137,10 @@ async function walkthrough(name, options) {
   await shot('6-history');
   await page.getByRole('button', { name: 'Clear' }).click();
   await page.getByText('Results for').waitFor({ state: 'detached' });
-  check(await rows.count() === 2, 'Clear shows the whole history again');
+  check(await rows.count() === 3, 'Clear shows the whole history again');
+  await page.getByRole('button', { name: /^Payments/ }).click();
+  check((await rows.first().innerText()).includes('Ben paid Anna Beispiel'), 'History > Payments lists the payment');
+  await shot('7-payments');
 
   // On a phone the tabs are a bar at the bottom edge of the screen.
   if (options.viewport.width < 640) {

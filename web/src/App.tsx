@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  Api, register, type Balance, type BankTransaction, type ExpenseHit, type Me, type Member, type SuggestedPayment,
+  Api, register, type Balance, type BankTransaction, type ExpenseHit, type Me, type Member, type PaymentRecord,
+  type SuggestedPayment,
 } from './api';
 import { localToday } from './ids';
 import { formatCents, parseEuroToCents } from './money';
+import { distributeRest, splitEqually, splitProportionally, type Allocation } from './split';
 
 const TOKEN_KEY = 'splitledger.token';
 
@@ -220,17 +222,19 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
   const [balances, setBalances] = useState<Balance[]>([]);
   const [payments, setPayments] = useState<SuggestedPayment[]>([]);
   const [candidates, setCandidates] = useState<BankTransaction[]>([]);
+  const [paid, setPaid] = useState<PaymentRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const reload = useCallback(async () => {
-    const [m, b, s, c] = await Promise.all([
-      api.members(groupId), api.balances(groupId), api.settlement(groupId), api.candidates(groupId),
+    const [m, b, s, c, p] = await Promise.all([
+      api.members(groupId), api.balances(groupId), api.settlement(groupId), api.candidates(groupId), api.payments(groupId),
     ]);
     setMembers(m);
     setBalances(b.balances);
     setPayments(s.payments);
     setCandidates(c);
+    setPaid(p);
   }, [api, groupId]);
 
   useEffect(() => { reload().catch((err) => setError(err.message)); }, [reload]);
@@ -294,6 +298,15 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
                 <PaymentCard key={`${p.fromMemberId}-${p.toMemberId}`} api={api} groupId={groupId} payment={p}
                   onPaid={() => run(() => api.recordPayment(groupId, p), `Recorded: ${p.fromName} paid ${p.toName} ${formatCents(p.amountCents)}`)} />
               ))}
+            {paid.length > 0 && (
+              <>
+                <h3 className="subhead">Recent payments</h3>
+                <PaymentList payments={paid.slice(0, 3)} names={new Map(members.map((m) => [m.id, m.displayName]))} />
+                {paid.length > 3 && (
+                  <button className="ghost wide spaced-small" onClick={() => setTab('history')}>All {paid.length} payments</button>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}
@@ -344,7 +357,7 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
         </div>
       )}
 
-      {tab === 'history' && <History api={api} groupId={groupId} members={members} />}
+      {tab === 'history' && <History api={api} groupId={groupId} members={members} payments={paid} />}
 
       {tab === 'members' && (
         <div className="columns">
@@ -383,25 +396,34 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
   );
 }
 
+/**
+ * Bars grow from a centre line: to the right (green) for what the group owes someone, to the left
+ * (red) for what someone owes. Length is relative to the largest balance in the group.
+ */
 function BalanceList({ balances, myMemberId }: { balances: Balance[]; myMemberId: number }) {
   const largest = Math.max(1, ...balances.map((b) => Math.abs(b.balanceCents)));
   return (
     <ul className="rows">
-      {balances.map((b) => (
-        <li key={b.memberId}>
-          <span className="avatar">{initials(b.displayName)}</span>
-          <div className="grow">
-            <strong>{b.displayName}{b.memberId === myMemberId ? ' (you)' : ''}</strong>
-            <div className="bar">
-              <span className={b.balanceCents < 0 ? 'negative' : 'positive'}
-                style={{ width: `${(Math.abs(b.balanceCents) / largest) * 100}%` }} />
+      {balances.map((b) => {
+        const cents = b.balanceCents;
+        const width = `${(Math.abs(cents) / largest) * 50}%`;
+        return (
+          <li key={b.memberId}>
+            <span className="avatar">{initials(b.displayName)}</span>
+            <div className="grow">
+              <div className="balance-head">
+                <strong>{b.displayName}{b.memberId === myMemberId ? ' (you)' : ''}</strong>
+                <span className={`amount ${cents < 0 ? 'negative' : cents > 0 ? 'positive' : 'muted'}`}>
+                  {cents > 0 ? `gets back ${formatCents(cents)}` : cents < 0 ? `owes ${formatCents(-cents)}` : 'settled'}
+                </span>
+              </div>
+              <div className="bar diverging" aria-hidden="true">
+                {cents !== 0 && <span className={cents < 0 ? 'negative' : 'positive'} style={{ width }} />}
+              </div>
             </div>
-          </div>
-          <span className={`amount ${b.balanceCents < 0 ? 'negative' : b.balanceCents > 0 ? 'positive' : ''}`}>
-            {b.balanceCents > 0 ? '+' : ''}{formatCents(b.balanceCents)}
-          </span>
-        </li>
-      ))}
+          </li>
+        );
+      })}
     </ul>
   );
 }
@@ -446,6 +468,13 @@ function PaymentCard({ api, groupId, payment, onPaid }:
   );
 }
 
+type SplitMode = 'EQUAL' | 'EXACT' | 'SHARES';
+const SPLIT_MODES: { id: SplitMode; label: string; hint: string }[] = [
+  { id: 'EQUAL', label: 'Equally', hint: 'Everyone selected pays the same.' },
+  { id: 'EXACT', label: 'Exact amounts', hint: 'Enter what each person owes; it has to add up to the total.' },
+  { id: 'SHARES', label: 'Shares', hint: 'E.g. 2 for someone who had two portions, 0 for someone who had none.' },
+];
+
 function ExpenseForm({ members, myMemberId, onSubmit, onDone }: {
   members: Member[]; myMemberId: number; onSubmit: (body: unknown) => Promise<boolean>; onDone: () => void;
 }) {
@@ -453,21 +482,74 @@ function ExpenseForm({ members, myMemberId, onSubmit, onDone }: {
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(localToday);
   const [payerId, setPayerId] = useState(myMemberId);
+  const [mode, setMode] = useState<SplitMode>('EQUAL');
   const [excluded, setExcluded] = useState<number[]>([]);
-  const participants = members.map((m) => m.id).filter((id) => !excluded.includes(id));
-  const cents = parseEuroToCents(amount);
-  const share = cents !== null && participants.length > 0 ? Math.floor(cents / participants.length) : null;
+  const [exact, setExact] = useState<Record<number, string>>({});
+  const [shares, setShares] = useState<Record<number, string>>({});
+  const total = parseEuroToCents(amount);
+  const name = (id: number) => members.find((m) => m.id === id)?.displayName ?? '?';
+
+  // What each person would owe, computed with the server's own rule (split.ts).
+  const exactCents = new Map(members.map((m) => {
+    const text = (exact[m.id] ?? '').trim();
+    return [m.id, text === '' || text === '0' ? 0 : parseEuroToCents(text)] as const;
+  }));
+  const invalidExact = [...exactCents.values()].some((cents) => cents === null);
+  const shareUnits = new Map(members.map((m) => {
+    const text = (shares[m.id] ?? '1').trim();
+    const units = /^\d{1,4}$/.test(text) ? Number(text) : NaN;
+    return [m.id, units] as const;
+  }));
+  const invalidShares = [...shareUnits.values()].some((units) => Number.isNaN(units) || units > 1000);
+
+  let allocations: Allocation[] = [];
+  if (total !== null) {
+    if (mode === 'EQUAL') {
+      allocations = splitEqually(total, members.map((m) => m.id).filter((id) => !excluded.includes(id)));
+    } else if (mode === 'SHARES' && !invalidShares) {
+      allocations = splitProportionally(total, members.map((m) => ({ memberId: m.id, weight: shareUnits.get(m.id) ?? 0 })));
+    } else if (mode === 'EXACT' && !invalidExact) {
+      allocations = members.map((m) => ({ memberId: m.id, cents: exactCents.get(m.id) ?? 0 })).filter((a) => a.cents > 0);
+    }
+  }
+  const assigned = allocations.reduce((sum, a) => sum + a.cents, 0);
+  const remaining = total === null ? 0 : total - assigned;
+
+  // Why the button is disabled, in words.
+  let problem: string | null = null;
+  if (total === null) problem = amount === '' ? 'Enter an amount.' : 'Use an amount like 12,50.';
+  else if (mode === 'EXACT' && invalidExact) problem = 'One of the amounts is not a valid number.';
+  else if (mode === 'SHARES' && invalidShares) problem = 'Shares must be whole numbers from 0 to 1000.';
+  else if (allocations.length === 0) problem = 'Choose who shares this expense.';
+  else if (mode === 'EXACT' && remaining !== 0) {
+    problem = remaining > 0 ? `${formatCents(remaining)} still has to be assigned.` : `${formatCents(-remaining)} too much assigned.`;
+  } else if (allocations.every((a) => a.memberId === payerId)) {
+    problem = `Only ${name(payerId)} takes part, so nothing would be shared. Add someone else.`;
+  }
+
+  function splitRest() {
+    if (total === null) return;
+    const current = new Map(members.map((m) => {
+      const text = (exact[m.id] ?? '').trim();
+      return [m.id, text === '' ? null : exactCents.get(m.id) ?? null] as const;
+    }));
+    const filled = distributeRest(total, current);
+    setExact(Object.fromEntries(members.map((m) => [m.id, formatPlain(filled.get(m.id) ?? 0)])));
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (cents === null || participants.length === 0) return;
-    const ok = await onSubmit({
-      payerId, amountCents: cents, description, expenseDate: date, splitMode: 'EQUAL',
-      participants: participants.map((memberId) => ({ memberId })),
-    });
+    if (problem || total === null) return;
+    const participants = mode === 'EQUAL'
+      ? allocations.map((a) => ({ memberId: a.memberId }))
+      : mode === 'EXACT'
+        ? allocations.map((a) => ({ memberId: a.memberId, value: a.cents }))
+        : members.filter((m) => (shareUnits.get(m.id) ?? 0) > 0).map((m) => ({ memberId: m.id, value: shareUnits.get(m.id) }));
+    const ok = await onSubmit({ payerId, amountCents: total, description, expenseDate: date, splitMode: mode, participants });
     if (ok) {
       setDescription('');
       setAmount('');
+      setExact({});
       onDone();
     }
   }
@@ -479,9 +561,9 @@ function ExpenseForm({ members, myMemberId, onSubmit, onDone }: {
         <Field label="What for?">
           <input value={description} onChange={(e) => setDescription(e.target.value)} required maxLength={200} placeholder="e.g. Groceries" />
         </Field>
-        <Field label="Amount (€)" hint={amount !== '' && cents === null ? 'Use a format like 12,50' : undefined}>
+        <Field label="Amount (€)">
           <input value={amount} onChange={(e) => setAmount(e.target.value)} required inputMode="decimal" placeholder="0,00"
-            aria-invalid={amount !== '' && cents === null} />
+            aria-invalid={amount !== '' && total === null} />
         </Field>
         <Field label="Date">
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} required />
@@ -492,30 +574,73 @@ function ExpenseForm({ members, myMemberId, onSubmit, onDone }: {
           </select>
         </Field>
       </div>
-      <div>
-        <span className="label">Split equally between</span>
-        <div className="chips">
-          {members.map((m) => {
-            const included = !excluded.includes(m.id);
-            return (
-              <button type="button" key={m.id} className={`chip ${included ? 'on' : ''}`} aria-pressed={included}
-                onClick={() => setExcluded(included ? [...excluded, m.id] : excluded.filter((id) => id !== m.id))}>
-                {m.displayName}
-              </button>
-            );
-          })}
+
+      <div className="stack-small">
+        <span className="label">How is it split?</span>
+        <div className="segmented three">
+          {SPLIT_MODES.map((m) => (
+            <button type="button" key={m.id} className={mode === m.id ? 'active' : ''} onClick={() => setMode(m.id)}>{m.label}</button>
+          ))}
         </div>
-        {share !== null && <p className="muted small">About {formatCents(share)} each; leftover cents go to the first members.</p>}
+        <p className="muted small">{SPLIT_MODES.find((m) => m.id === mode)!.hint}</p>
       </div>
-      <button className="primary wide" disabled={cents === null || participants.length === 0}>
-        Add {cents !== null ? formatCents(cents) : 'expense'}
+
+      <ul className="rows split-rows">
+        {members.map((m) => {
+          const share = allocations.find((a) => a.memberId === m.id)?.cents ?? 0;
+          const included = !excluded.includes(m.id);
+          return (
+            <li key={m.id}>
+              <span className="avatar">{initials(m.displayName)}</span>
+              <div className="grow"><strong>{m.displayName}{m.id === myMemberId ? ' (you)' : ''}</strong></div>
+              {mode === 'EQUAL' && (
+                <button type="button" className={`chip ${included ? 'on' : ''}`} aria-pressed={included}
+                  aria-label={`${m.displayName} shares`}
+                  onClick={() => setExcluded(included ? [...excluded, m.id] : excluded.filter((id) => id !== m.id))}>
+                  {included ? 'Shares' : 'Not in'}
+                </button>
+              )}
+              {mode === 'EXACT' && (
+                <input className="amount-input" inputMode="decimal" placeholder="0,00" aria-label={`Amount for ${m.displayName}`}
+                  value={exact[m.id] ?? ''} aria-invalid={exactCents.get(m.id) === null}
+                  onChange={(e) => setExact({ ...exact, [m.id]: e.target.value })} />
+              )}
+              {mode === 'SHARES' && (
+                <input className="amount-input" inputMode="numeric" aria-label={`Shares of ${m.displayName}`}
+                  value={shares[m.id] ?? '1'} aria-invalid={Number.isNaN(shareUnits.get(m.id) ?? 0)}
+                  onChange={(e) => setShares({ ...shares, [m.id]: e.target.value })} />
+              )}
+              {mode !== 'EXACT' && <span className="amount share-preview">{share > 0 ? formatCents(share) : '–'}</span>}
+            </li>
+          );
+        })}
+      </ul>
+
+      {mode === 'EXACT' && total !== null && !invalidExact && (
+        <div className={`assigned ${remaining === 0 ? 'done' : remaining < 0 ? 'over' : ''}`}>
+          <span>{formatCents(assigned)} of {formatCents(total)} assigned
+            {remaining !== 0 && ` · ${remaining > 0 ? `${formatCents(remaining)} left` : `${formatCents(-remaining)} too much`}`}</span>
+          {remaining > 0 && <button type="button" className="ghost" onClick={splitRest}>Split the rest</button>}
+        </div>
+      )}
+
+      {problem && amount !== '' && <p className="muted small">{problem}</p>}
+      <button className="primary wide" disabled={problem !== null}>
+        Add {total !== null ? formatCents(total) : 'expense'}
       </button>
     </form>
   );
 }
 
-/** The whole history, newest first, 20 at a time; the search box narrows it down. */
-function History({ api, groupId, members }: { api: Api; groupId: number; members: Member[] }) {
+/** 1250 -> "12,50" for an input field (no currency sign, no thousands separator). */
+function formatPlain(cents: number): string {
+  return `${Math.floor(cents / 100)},${String(cents % 100).padStart(2, '0')}`;
+}
+
+/** Expenses (newest first, 20 at a time, searchable) and recorded payments. */
+function History({ api, groupId, members, payments }:
+  { api: Api; groupId: number; members: Member[]; payments: PaymentRecord[] }) {
+  const [view, setView] = useState<'expenses' | 'payments'>('expenses');
   const [query, setQuery] = useState('');
   const [activeQuery, setActiveQuery] = useState('');
   const [items, setItems] = useState<ExpenseHit[] | null>(null);
@@ -539,42 +664,80 @@ function History({ api, groupId, members }: { api: Api; groupId: number; members
 
   return (
     <div className="card">
-      <h2>History</h2>
-      <form className="inline" onSubmit={(e) => { e.preventDefault(); void load(query.trim()); }}>
-        <input aria-label="Search" placeholder="Search: Einkauf, Pizza, Lidl, Berlin…" value={query}
-          onChange={(e) => setQuery(e.target.value)} />
-        <button className="primary">Search</button>
-        {activeQuery && (
-          <button type="button" className="ghost" onClick={() => { setQuery(''); void load(''); }}>Clear</button>
-        )}
-      </form>
-      {activeQuery && items && <p className="muted small spaced-small">Results for “{activeQuery}”</p>}
-      {error && <Alert kind="error" text={error} onClose={() => setError(null)} />}
-      {items === null && <p className="muted spaced-small">Loading…</p>}
-      {items !== null && items.length === 0 && (
-        activeQuery
-          ? <Empty title="Nothing found" text="Try another word; small typos are fine." />
-          : <Empty title="No expenses yet" text="Add one or import your bank statement." />
+      <div className="card-head">
+        <h2>History</h2>
+        <div className="segmented compact">
+          <button className={view === 'expenses' ? 'active' : ''} onClick={() => setView('expenses')}>Expenses</button>
+          <button className={view === 'payments' ? 'active' : ''} onClick={() => setView('payments')}>
+            Payments{payments.length > 0 ? ` (${payments.length})` : ''}
+          </button>
+        </div>
+      </div>
+
+      {view === 'payments' && (
+        payments.length === 0
+          ? <Empty title="No payments yet" text="When someone settles up and marks it as paid, it appears here." />
+          : <PaymentList payments={payments} names={names} />
       )}
-      {items && items.length > 0 && (
-        <ul className="rows">
-          {items.map((h) => (
-            <li key={h.id} className={h.reversed ? 'reversed' : ''}>
-              <div className="grow">
-                <strong>{h.description}</strong>
-                <span className="muted small">
-                  {formatDate(h.expenseDate)} · paid by {names.get(h.payerId) ?? '?'}{h.reversed ? ' · reversed' : ''}
-                </span>
-              </div>
-              <span className="amount">{formatCents(h.amountCents)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {cursor && (
-        <button className="ghost wide spaced-small" onClick={() => void load(activeQuery, cursor)}>Load more</button>
+
+      {view === 'expenses' && (
+        <>
+          <form className="inline" onSubmit={(e) => { e.preventDefault(); void load(query.trim()); }}>
+            <input aria-label="Search" placeholder="Search: Einkauf, Pizza, Lidl, Berlin…" value={query}
+              onChange={(e) => setQuery(e.target.value)} />
+            <button className="primary">Search</button>
+            {activeQuery && (
+              <button type="button" className="ghost" onClick={() => { setQuery(''); void load(''); }}>Clear</button>
+            )}
+          </form>
+          {activeQuery && items && <p className="muted small spaced-small">Results for “{activeQuery}”</p>}
+          {error && <Alert kind="error" text={error} onClose={() => setError(null)} />}
+          {items === null && <p className="muted spaced-small">Loading…</p>}
+          {items !== null && items.length === 0 && (
+            activeQuery
+              ? <Empty title="Nothing found" text="Try another word; small typos are fine." />
+              : <Empty title="No expenses yet" text="Add one or import your bank statement." />
+          )}
+          {items && items.length > 0 && (
+            <ul className="rows">
+              {items.map((h) => (
+                <li key={h.id} className={h.reversed ? 'reversed' : ''}>
+                  <div className="grow">
+                    <strong>{h.description}</strong>
+                    <span className="muted small">
+                      {formatDate(h.expenseDate)} · paid by {names.get(h.payerId) ?? '?'}{h.reversed ? ' · reversed' : ''}
+                    </span>
+                  </div>
+                  <span className="amount">{formatCents(h.amountCents)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {cursor && (
+            <button className="ghost wide spaced-small" onClick={() => void load(activeQuery, cursor)}>Load more</button>
+          )}
+        </>
       )}
     </div>
+  );
+}
+
+function PaymentList({ payments, names }: { payments: PaymentRecord[]; names: Map<number, string> }) {
+  return (
+    <ul className="rows">
+      {payments.map((p) => (
+        <li key={p.id}>
+          <span className="avatar">{initials(names.get(p.fromMemberId) ?? '?')}</span>
+          <span className="arrow" aria-hidden="true">→</span>
+          <span className="avatar">{initials(names.get(p.toMemberId) ?? '?')}</span>
+          <div className="grow">
+            <strong>{names.get(p.fromMemberId) ?? '?'} paid {names.get(p.toMemberId) ?? '?'}</strong>
+            <span className="muted small">{formatDateTime(p.createdAt)}{p.note ? ` · ${p.note}` : ''}</span>
+          </div>
+          <span className="amount positive">{formatCents(p.amountCents)}</span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -649,6 +812,10 @@ function initials(name: string): string {
 
 function formatIban(iban: string): string {
   return iban.replace(/(.{4})/g, '$1 ').trim();
+}
+
+function formatDateTime(isoInstant: string): string {
+  return new Date(isoInstant).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
 function formatDate(isoDate: string): string {

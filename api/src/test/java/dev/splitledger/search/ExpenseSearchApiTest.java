@@ -101,7 +101,7 @@ class ExpenseSearchApiTest extends IntegrationTest {
         long ours = expense(anna, 1000, "Einkauf Edeka", null, "2026-03-02", anna, ben);
         long otherGroup = createGroup("Neighbours");
         long dana = addMember(otherGroup, "Dana");
-        createExpense(otherGroup, dana, 1000, "Einkauf Edeka", dana);
+        createExpense(otherGroup, dana, 1000, "Einkauf Edeka", dana, myMemberId(otherGroup));
 
         assertThat(searchIds("q", "Edeka")).containsExactly(ours);
     }

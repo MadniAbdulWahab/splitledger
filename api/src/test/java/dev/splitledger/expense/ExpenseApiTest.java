@@ -71,7 +71,8 @@ class ExpenseApiTest extends IntegrationTest {
         MvcTestResult result = mvc.post().uri("/groups/{id}/expenses", otherGroup)
                 .header("Idempotency-Key", "shared-key")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(expenseJson(dana, 500, "Coffee", "EQUAL", "[{\"memberId\": %d}]".formatted(dana)))
+                .content(expenseJson(dana, 500, "Coffee", "EQUAL",
+                        "[{\"memberId\": %d}, {\"memberId\": %d}]".formatted(dana, myMemberId(otherGroup))))
                 .exchange();
 
         assertThat(result).hasStatus(201).hasHeader("Idempotent-Replayed", "false");
@@ -107,6 +108,16 @@ class ExpenseApiTest extends IntegrationTest {
                 "[{\"memberId\": %d, \"value\": 700}]".formatted(ben)));
 
         assertThat(result).hasStatus(422);
+        assertThat(countExpenses()).isZero();
+    }
+
+    @Test
+    void anExpenseOnlyThePayerSharesIsRejected() {
+        MvcTestResult result = postExpense("self", expenseJson(anna, 1000, "Just me", "EQUAL",
+                "[{\"memberId\": %d}]".formatted(anna)));
+
+        assertThat(result).hasStatus(422);
+        assertThat(result).bodyJson().extractingPath("$.detail").asString().contains("Only the payer takes part");
         assertThat(countExpenses()).isZero();
     }
 
