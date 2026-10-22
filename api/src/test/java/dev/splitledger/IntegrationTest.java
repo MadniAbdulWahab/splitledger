@@ -4,6 +4,7 @@ import com.jayway.jsonpath.JsonPath;
 import dev.splitledger.security.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
@@ -12,6 +13,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.springframework.web.context.WebApplicationContext;
+
+import jakarta.servlet.Filter;
 
 import java.io.UnsupportedEncodingException;
 import java.util.UUID;
@@ -38,6 +41,11 @@ public abstract class IntegrationTest {
     @Autowired
     protected UserService userService;
 
+    /** Runs first, as in the application (request id, request log line). */
+    @Autowired
+    @Qualifier("requestLoggingFilter")
+    private Filter requestLoggingFilter;
+
     /** Requests as the current test user. */
     protected MockMvcTester mvc;
 
@@ -49,16 +57,20 @@ public abstract class IntegrationTest {
         mvc = as(me.token());
     }
 
-    /** Requests with another user's token; the full security filter chain runs. */
+    /** Requests with another user's token, through the logging filter and the security filter chain. */
     protected MockMvcTester as(String token) {
         return MockMvcTester.from(context, builder -> builder
+                .addFilters(requestLoggingFilter)
                 .apply(springSecurity())
                 .defaultRequest(get("/").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
                 .build());
     }
 
     protected MockMvcTester anonymous() {
-        return MockMvcTester.from(context, builder -> builder.apply(springSecurity()).build());
+        return MockMvcTester.from(context, builder -> builder
+                .addFilters(requestLoggingFilter)
+                .apply(springSecurity())
+                .build());
     }
 
     /** Creates a group as the current user, who becomes its first member ("Anna"). */
