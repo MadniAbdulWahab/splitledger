@@ -1,0 +1,104 @@
+name: Deploy
+
+# Started by hand (Actions -> Deploy -> Run workflow): the AWS stack only exists while it is being
+# demonstrated, so deploying on every push would fail whenever it has been destroyed.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # GitHub signs an OIDC token for this job; AWS trades it for a one-hour session
+  actions: read # to check that CI passed for the commit
+
+# Never two deployments at once; a second one waits for the first.
+concurrency:
+  group: deploy-aws
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: eu-central-1
+  # Not secrets: the role only trusts this repository's jobs in the "aws" environment.
+  AWS_ROLE_ARN: arn:aws:iam::718543338703:role/splitledger-github-deploy
+  ECR_REPOSITORY: splitledger-api
+  ECS_CLUSTER: splitledger
+  ECS_SERVICE: splitledger-api
+  TASK_FAMILY: splitledger-api
+  CONTAINER_NAME: api
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    # The IAM trust policy requires this environment (token claim "repo:...:environment:aws").
+    # Protection rules such as a required reviewer can be added to it in the repository settings.
+    environment: aws
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Only deploy commits that passed CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          conclusion="$(gh run list --workflow ci.yml --commit "$GITHUB_SHA" --status completed \
+            --json conclusion --jq '.[0].conclusion')"
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::CI has not passed for $GITHUB_SHA (result: ${conclusion:-no completed run})"
+            exit 1
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      # Tags are immutable in ECR: a commit that was pushed before is reused, not rebuilt.
+      - id: image
+        name: Build and push the image (tag = commit)
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: |
+          tag="${GITHUB_SHA::12}"
+          image="$REGISTRY/$ECR_REPOSITORY:$tag"
+          if aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$tag" > /dev/null 2>&1; then
+            echo "Image $tag already in ECR"
+          else
+            docker build --tag "$image" api
+            docker push "$image"
+          fi
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      # Starts from the newest revision, so changes Terraform made to the task definition (for
+      # example new environment variables) are deployed together with the new image.
+      - name: Read the current task definition
+        run: aws ecs describe-task-definition --task-definition "$TASK_FAMILY" --query taskDefinition > task-definition.json
+
+      - id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@8d79160660ad39c402a16e5fc7cd2a32e8f7d6b7 # v1.9.1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ env.CONTAINER_NAME }}
+          image: ${{ steps.image.outputs.image }}
+
+      # Registers the revision, points the service at it and waits until the new task is healthy.
+      # The service's circuit breaker rolls back if it never becomes healthy.
+      - uses: aws-actions/amazon-ecs-deploy-task-definition@a00d4d57ac0de1a99b39fe469f3d898d38717c2b # v2.6.4
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+          cluster: ${{ env.ECS_CLUSTER }}
+          service: ${{ env.ECS_SERVICE }}
+          wait-for-service-stability: true
+          wait-for-minutes: 10
+
+      - name: Smoke test
+        run: |
+          task="$(aws ecs list-tasks --cluster "$ECS_CLUSTER" --service-name "$ECS_SERVICE" --desired-status RUNNING \
+            --query 'taskArns[0]' --output text)"
+          eni="$(aws ecs describe-tasks --cluster "$ECS_CLUSTER" --tasks "$task" \
+            --query "tasks[0].attachments[0].details[?name=='networkInterfaceId'].value | [0]" --output text)"
+          ip="$(aws ec2 describe-network-interfaces --network-interface-ids "$eni" \
+            --query 'NetworkInterfaces[0].Association.PublicIp' --output text)"
+          curl --fail --silent --show-error --retry 5 --retry-delay 10 --retry-all-errors "http://$ip:8080/actuator/health"
+          echo
+          echo "### Deployed ${GITHUB_SHA::12} to http://$ip:8080" >> "$GITHUB_STEP_SUMMARY"

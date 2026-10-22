@@ -1,3 +1,8 @@
+output "dashboard_url" {
+  description = "CloudWatch dashboard of the API"
+  value       = "https://${var.aws_region}.console.aws.amazon.com/cloudwatch/home?region=${var.aws_region}#dashboards/dashboard/${aws_cloudwatch_dashboard.main.dashboard_name}"
+}
+
 output "db_endpoint" {
   description = "Private address of the database (reachable only from the API task)"
   value       = aws_db_instance.main.address
@@ -16,6 +21,11 @@ output "ecs_cluster_name" {
 output "ecs_service_name" {
   description = "ECS service of the API"
   value       = aws_ecs_service.api.name
+}
+
+output "github_deploy_role_arn" {
+  description = "Role the deploy workflow assumes through GitHub OIDC"
+  value       = aws_iam_role.github_deploy.arn
 }
 
 output "log_group_name" {

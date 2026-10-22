@@ -12,4 +12,7 @@ locals {
   db_app_user = "splitledger_app"
   db_name     = "splitledger"
   db_owner    = "splitledger"
+
+  # Custom metrics derived from the API's JSON request log lines (monitoring.tf).
+  metrics_namespace = "SplitLedger"
 }

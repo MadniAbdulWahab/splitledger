@@ -1,3 +1,13 @@
+variable "alarm_email" {
+  description = "Email address for CloudWatch alarms (set it in terraform.tfvars, which is git-ignored)"
+  type        = string
+
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.alarm_email))
+    error_message = "alarm_email must be an email address."
+  }
+}
+
 variable "api_allowed_cidrs" {
   description = "IPv4 ranges allowed to call the API on port 8080; narrow it to your own IP (x.x.x.x/32) for a private demo"
   type        = list(string)
@@ -47,6 +57,12 @@ variable "db_instance_class" {
   description = "RDS instance size; db.t4g.micro is the smallest"
   type        = string
   default     = "db.t4g.micro"
+}
+
+variable "github_repository" {
+  description = "GitHub repository (owner/name) whose deploy workflow may assume the deploy role"
+  type        = string
+  default     = "MadniAbdulWahab/splitledger"
 }
 
 variable "log_retention_days" {

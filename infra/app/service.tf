@@ -38,6 +38,8 @@ resource "aws_ecs_task_definition" "api" {
       { name = "DB_URL", value = "jdbc:postgresql://${aws_db_instance.main.address}:${aws_db_instance.main.port}/${local.db_name}" },
       { name = "DB_USER", value = local.db_app_user },
       { name = "SPRING_FLYWAY_USER", value = local.db_owner },
+      # JSON log lines (Elastic Common Schema format) for CloudWatch metric filters and queries.
+      { name = "LOGGING_STRUCTURED_FORMAT_CONSOLE", value = "ecs" },
     ]
 
     # ECS reads these from SSM when the task starts; they never appear in the task definition.
@@ -91,5 +93,13 @@ resource "aws_ecs_service" "api" {
     subnets          = [for subnet in aws_subnet.public : subnet.id]
     security_groups  = [aws_security_group.api.id]
     assign_public_ip = true
+  }
+
+  # After the first deployment, the deploy workflow registers new task definition revisions with
+  # new images. Terraform must not roll the service back to its own revision on the next apply.
+  # A Terraform change to the task definition (e.g. a new environment variable) creates a new
+  # revision that the next deployment picks up, because the workflow starts from the latest one.
+  lifecycle {
+    ignore_changes = [task_definition]
   }
 }
