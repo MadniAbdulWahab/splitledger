@@ -120,8 +120,12 @@ public class BankImportService {
         String description = request.description() != null && !request.description().isBlank()
                 ? request.description()
                 : t.getCounterpartyName() != null ? truncate(t.getCounterpartyName(), 200) : "Bank payment";
-        CreateExpenseRequest expense = new CreateExpenseRequest(memberId, -t.getAmountCents(), description,
-                request.notes(), t.getBookingDate(), request.splitMode(), request.participants());
+        CreateExpenseRequest expense = new CreateExpenseRequest(
+                request.payerId() != null ? request.payerId() : memberId,
+                request.amountCents() != null ? request.amountCents() : -t.getAmountCents(),
+                description, request.notes(),
+                request.expenseDate() != null ? request.expenseDate() : t.getBookingDate(),
+                request.splitMode(), request.participants());
         ExpenseResponse created = expenseService.createInTransaction(groupId, "bank-transaction-" + t.getId(),
                 expense, t.getPurpose());
         t.confirm(created.id());

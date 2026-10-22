@@ -18,7 +18,8 @@ class OpenApiDocsTest extends IntegrationTest {
         assertThat(docs).bodyJson().extractingPath("$.paths").asMap().containsKeys(
                 "/users", "/me", "/groups", "/invitations/accept",
                 "/groups/{groupId}/expenses", "/groups/{groupId}/expenses/search",
-                "/groups/{groupId}/expenses/{expenseId}/reversal", "/groups/{groupId}/imports",
+                "/groups/{groupId}/expenses/{expenseId}/reversal", "/groups/{groupId}/expenses/{expenseId}/correction",
+                "/groups/{groupId}/payments/{paymentId}/reversal", "/groups/{groupId}/imports",
                 "/groups/{groupId}/bank-transactions/{transactionId}/confirmation",
                 "/groups/{groupId}/balances", "/groups/{groupId}/settlement", "/groups/{groupId}/payments",
                 "/groups/{groupId}/verify");

@@ -24,7 +24,8 @@ public record LedgerEvent(
     public enum EventType {
         EXPENSE_RECORDED,
         EXPENSE_REVERSED,
-        PAYMENT_RECORDED
+        PAYMENT_RECORDED,
+        PAYMENT_REVERSED
     }
 
     public record MemberPosting(long memberId, String displayName, long amountCents) {

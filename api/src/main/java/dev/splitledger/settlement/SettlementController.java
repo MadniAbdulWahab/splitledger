@@ -1,6 +1,8 @@
 package dev.splitledger.settlement;
 
 import dev.splitledger.common.IdempotentCreator;
+import dev.splitledger.group.GroupService;
+import dev.splitledger.security.CurrentUser;
 import dev.splitledger.settlement.SettlementDtos.DebtsResponse;
 import dev.splitledger.settlement.SettlementDtos.PaymentResponse;
 import dev.splitledger.settlement.SettlementDtos.RecordPaymentRequest;
@@ -12,6 +14,7 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,9 +30,11 @@ import java.util.List;
 class SettlementController {
 
     private final SettlementService settlementService;
+    private final GroupService groupService;
 
-    SettlementController(SettlementService settlementService) {
+    SettlementController(SettlementService settlementService, GroupService groupService) {
         this.settlementService = settlementService;
+        this.groupService = groupService;
     }
 
     /** Who owes whom, pair by pair ("Madni owes Lucy 10,00 €"). */
@@ -73,5 +78,12 @@ class SettlementController {
     @GetMapping("/groups/{groupId}/payments")
     List<PaymentResponse> list(@PathVariable long groupId) {
         return settlementService.list(groupId);
+    }
+
+    /** Undo a payment recorded by mistake; it stays in the list, marked as undone and by whom. */
+    @PostMapping("/groups/{groupId}/payments/{paymentId}/reversal")
+    PaymentResponse undo(@PathVariable long groupId, @PathVariable long paymentId,
+                         @AuthenticationPrincipal CurrentUser user) {
+        return settlementService.undo(groupId, paymentId, groupService.memberIdOf(groupId, user));
     }
 }

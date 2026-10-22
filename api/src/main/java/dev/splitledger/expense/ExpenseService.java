@@ -10,6 +10,7 @@ import dev.splitledger.expense.ExpenseDtos.ExpenseResponse;
 import dev.splitledger.expense.SplitCalculator.Allocation;
 import dev.splitledger.expense.SplitCalculator.Participant;
 import dev.splitledger.group.GroupService;
+import dev.splitledger.ledger.CorrectionLog;
 import dev.splitledger.ledger.EntryKind;
 import dev.splitledger.ledger.LedgerService;
 import dev.splitledger.ledger.Posting;
@@ -36,17 +37,19 @@ public class ExpenseService {
     private final LedgerService ledgerService;
     private final IdempotentCreator idempotentCreator;
     private final OutboxService outbox;
+    private final CorrectionLog corrections;
     private final TransactionTemplate writeTx;
     private final TransactionTemplate readTx;
 
     ExpenseService(ExpenseRepository expenses, GroupService groupService, LedgerService ledgerService,
-                   IdempotentCreator idempotentCreator, OutboxService outbox,
+                   IdempotentCreator idempotentCreator, OutboxService outbox, CorrectionLog corrections,
                    PlatformTransactionManager transactionManager) {
         this.expenses = expenses;
         this.groupService = groupService;
         this.ledgerService = ledgerService;
         this.idempotentCreator = idempotentCreator;
         this.outbox = outbox;
+        this.corrections = corrections;
         this.writeTx = new TransactionTemplate(transactionManager);
         this.readTx = new TransactionTemplate(transactionManager);
         this.readTx.setReadOnly(true);
@@ -82,19 +85,52 @@ public class ExpenseService {
     }
 
     /**
-     * Cancels an expense by writing reversing ledger entries. The expense row and its original
-     * entries stay as they are; balances return to where they were before the expense.
+     * Deletes an expense the ledger way: reversing entries cancel it, the expense row and its
+     * original entries stay, and the correction log records who did it. Balances return to where
+     * they were before the expense.
      */
-    public ExpenseResponse reverse(long groupId, long expenseId) {
+    public ExpenseResponse delete(long groupId, long expenseId, long memberId) {
         return writeTx.execute(status -> {
-            Expense expense = findInGroup(groupId, expenseId);
-            List<Posting> reversal = ledgerService.reverse(groupId, EntryKind.EXPENSE, expense.getId()).stream()
-                    .map(entry -> new Posting(entry.getMemberId(), entry.getAmountCents()))
-                    .toList();
-            outbox.record(EventType.EXPENSE_REVERSED, groupId, expense.getId(), expense.getExpenseDate(),
-                    expense.getDescription(), expense.getAmountCents(), reversal);
+            Expense expense = cancel(groupId, expenseId);
+            corrections.expenseDeleted(groupId, expenseId, memberId);
             return ExpenseResponse.from(expense, true);
         });
+    }
+
+    /**
+     * Edits an expense: the old version is reversed and the new one created in one transaction, so
+     * the group never sees both or neither. Idempotent per key like {@link #create}; the original
+     * expense id is part of the request hash, so a key cannot be reused to edit another expense.
+     * An expense is corrected at most once (409 afterwards); the new version can be edited again.
+     */
+    public Creation edit(long groupId, long expenseId, long memberId, String idempotencyKey, CreateExpenseRequest request) {
+        String requestHash = Sha256.hex("edit of " + expenseId + "\n" + request.canonicalForm());
+        try {
+            return idempotentCreator.create(IDEMPOTENCY_CONSTRAINT,
+                    () -> findEarlier(groupId, idempotencyKey, requestHash),
+                    () -> {
+                        Expense original = cancel(groupId, expenseId);
+                        Creation created = insert(groupId, idempotencyKey, requestHash, request, original.getBankPurpose());
+                        corrections.expenseEdited(groupId, expenseId, created.expense().id(), memberId);
+                        return created;
+                    }).value();
+        } catch (ConflictException alreadyCorrected) {
+            // A retry with the same key that ran at the same moment waited for the group lock and
+            // then found the expense reversed. It gets the first request's result, like a replay.
+            return readTx.execute(status -> findEarlier(groupId, idempotencyKey, requestHash))
+                    .orElseThrow(() -> alreadyCorrected);
+        }
+    }
+
+    /** Reversing entries plus the outbox event; the caller's transaction adds the correction record. */
+    private Expense cancel(long groupId, long expenseId) {
+        Expense expense = findInGroup(groupId, expenseId);
+        List<Posting> reversal = ledgerService.reverse(groupId, EntryKind.EXPENSE, expense.getId()).stream()
+                .map(entry -> new Posting(entry.getMemberId(), entry.getAmountCents()))
+                .toList();
+        outbox.record(EventType.EXPENSE_REVERSED, groupId, expense.getId(), expense.getExpenseDate(),
+                expense.getDescription(), expense.getAmountCents(), reversal);
+        return expense;
     }
 
     private Expense findInGroup(long groupId, long expenseId) {

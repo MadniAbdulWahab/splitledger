@@ -11,9 +11,22 @@ export interface SuggestedPayment {
   fromMemberId: number; fromName: string; toMemberId: number; toName: string;
   toIban: string | null; toBic: string | null; amountCents: number;
 }
+export type SplitMode = 'EQUAL' | 'EXACT' | 'SHARES';
+/** A history row. change/changedBy say who deleted or edited it; replacesExpenseId marks a new version. */
 export interface ExpenseHit {
   id: number; payerId: number; amountCents: number; description: string; notes: string | null;
   expenseDate: string; reversed: boolean;
+  change: 'DELETED' | 'EDITED' | null; changedBy: number | null; changedAt: string | null; replacesExpenseId: number | null;
+}
+export interface Expense {
+  id: number; payerId: number; amountCents: number; description: string; notes: string | null;
+  expenseDate: string; splitMode: SplitMode; reversed: boolean;
+  shares: { memberId: number; amountCents: number; shareUnits: number | null }[];
+}
+/** What the expense form sends: a new expense, an edit, or a shared bank payment. */
+export interface ExpenseBody {
+  payerId: number; amountCents: number; description: string; notes: string | null; expenseDate: string;
+  splitMode: SplitMode; participants: { memberId: number; value?: number }[];
 }
 export interface BankTransaction {
   id: number; bookingDate: string; amountCents: number; counterpartyName: string | null;
@@ -21,6 +34,7 @@ export interface BankTransaction {
 }
 export interface PaymentRecord {
   id: number; fromMemberId: number; toMemberId: number; amountCents: number; note: string | null; createdAt: string;
+  reversed: boolean; undoneBy: number | null; undoneAt: string | null;
 }
 export interface ImportReport {
   rowsRead: number; newTransactions: number; duplicates: number; skippedCount: number;
@@ -51,8 +65,15 @@ export class Api {
   debts = (g: number) => this.json<{ debts: SuggestedPayment[] }>('GET', `/groups/${g}/debts`);
 
   // Every create sends a fresh Idempotency-Key, so a retried click never books twice.
-  addExpense = (g: number, body: unknown) =>
+  addExpense = (g: number, body: ExpenseBody) =>
     this.json('POST', `/groups/${g}/expenses`, body, { 'Idempotency-Key': newIdempotencyKey() });
+  getExpense = (g: number, id: number) => this.json<Expense>('GET', `/groups/${g}/expenses/${id}`);
+  /** The old version stays in the history, crossed out; the body becomes the new version. */
+  editExpense = (g: number, id: number, body: ExpenseBody) =>
+    this.json('POST', `/groups/${g}/expenses/${id}/correction`, body, { 'Idempotency-Key': newIdempotencyKey() });
+  /** Reversing entries cancel it; the history keeps it crossed out with who deleted it. */
+  deleteExpense = (g: number, id: number) => this.json('POST', `/groups/${g}/expenses/${id}/reversal`);
+  undoPayment = (g: number, id: number) => this.json('POST', `/groups/${g}/payments/${id}/reversal`);
   /** Recorded settle-up payments, newest first. */
   payments = (g: number) => this.json<PaymentRecord[]>('GET', `/groups/${g}/payments`);
   recordPayment = (g: number, p: SuggestedPayment) =>
@@ -65,9 +86,9 @@ export class Api {
     this.json<{ items: ExpenseHit[]; nextCursor: string | null }>('GET',
       `/groups/${g}/expenses/search?limit=20&q=${encodeURIComponent(q)}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
   candidates = (g: number) => this.json<BankTransaction[]>('GET', `/groups/${g}/bank-transactions`);
-  confirm = (g: number, id: number, memberIds: number[]) =>
-    this.json('POST', `/groups/${g}/bank-transactions/${id}/confirmation`,
-      { splitMode: 'EQUAL', participants: memberIds.map((memberId) => ({ memberId })) });
+  /** Shares a bank payment with what the user chose in the form (payer, amount, date, split). */
+  confirm = (g: number, id: number, body: ExpenseBody) =>
+    this.json('POST', `/groups/${g}/bank-transactions/${id}/confirmation`, body);
   ignore = (g: number, id: number) => this.json('POST', `/groups/${g}/bank-transactions/${id}/ignore`);
 
   importStatement(g: number, file: File): Promise<ImportReport> {

@@ -83,7 +83,7 @@ class ExpenseConcurrencyTest extends IntegrationTest {
 
         List<String> outcomes = runConcurrently(i -> {
             try {
-                expenseService.reverse(groupId, expenseId);
+                expenseService.delete(groupId, expenseId, anna);
                 return "reversed";
             } catch (ConflictException e) {
                 return "conflict";

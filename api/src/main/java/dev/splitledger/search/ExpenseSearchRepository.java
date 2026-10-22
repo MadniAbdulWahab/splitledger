@@ -29,6 +29,10 @@ class ExpenseSearchRepository {
             rs.getString("notes"),
             rs.getObject("expense_date", LocalDate.class),
             rs.getBoolean("reversed"),
+            rs.getString("change"),
+            rs.getObject("changed_by", Long.class),
+            rs.getTimestamp("changed_at") != null ? rs.getTimestamp("changed_at").toInstant() : null,
+            rs.getObject("replaces_expense_id", Long.class),
             rs.getDouble("score"));
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -106,7 +110,11 @@ class ExpenseSearchRepository {
                 select page.*,
                        exists (select 1 from ledger_entry original
                                join ledger_entry reversal on reversal.reference_id = original.id and reversal.kind = 'REVERSAL'
-                               where original.kind = 'EXPENSE' and original.reference_id = page.id) as reversed
+                               where original.kind = 'EXPENSE' and original.reference_id = page.id) as reversed,
+                       case changed.kind when 'EXPENSE_DELETED' then 'DELETED' when 'EXPENSE_EDITED' then 'EDITED' end as change,
+                       changed.member_id as changed_by,
+                       changed.created_at as changed_at,
+                       replaced.expense_id as replaces_expense_id
                 from (
                     select * from (
                         select e.id, e.payer_id, e.amount_cents, e.description, e.notes, e.expense_date,
@@ -118,6 +126,8 @@ class ExpenseSearchRepository {
                     order by scored.score desc, scored.id desc
                     limit :limit
                 ) page
+                left join correction changed on changed.expense_id = page.id
+                left join correction replaced on replaced.replacement_expense_id = page.id
                 order by page.score desc, page.id desc
                 """.formatted(score, textQuery, where, afterCursor);
         return new Query(sql, params);

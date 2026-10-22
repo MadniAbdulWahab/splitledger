@@ -21,7 +21,7 @@ data class LedgerEvent(
 )
 
 @Serializable
-enum class EventType { EXPENSE_RECORDED, EXPENSE_REVERSED, PAYMENT_RECORDED }
+enum class EventType { EXPENSE_RECORDED, EXPENSE_REVERSED, PAYMENT_RECORDED, PAYMENT_REVERSED }
 
 @Serializable
 data class MemberPosting(val memberId: Long, val displayName: String? = null, val amountCents: Long)

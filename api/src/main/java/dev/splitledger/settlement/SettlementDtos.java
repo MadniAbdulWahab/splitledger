@@ -1,6 +1,7 @@
 package dev.splitledger.settlement;
 
 import dev.splitledger.common.CanonicalText;
+import dev.splitledger.ledger.CorrectionLog;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -37,11 +38,13 @@ public final class SettlementDtos {
         }
     }
 
+    /** {@code undoneBy}/{@code undoneAt} are set when the payment was undone (then {@code reversed}). */
     public record PaymentResponse(long id, long groupId, long fromMemberId, long toMemberId, long amountCents,
-                                  String note, Instant createdAt) {
-        static PaymentResponse from(Payment p) {
+                                  String note, Instant createdAt, boolean reversed, Long undoneBy, Instant undoneAt) {
+        static PaymentResponse from(Payment p, CorrectionLog.Entry undone) {
             return new PaymentResponse(p.getId(), p.getGroupId(), p.getFromMemberId(), p.getToMemberId(),
-                    p.getAmountCents(), p.getNote(), p.getCreatedAt());
+                    p.getAmountCents(), p.getNote(), p.getCreatedAt(), undone != null,
+                    undone != null ? undone.memberId() : null, undone != null ? undone.at() : null);
         }
     }
 }

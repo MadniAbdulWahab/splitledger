@@ -7,6 +7,7 @@ import dev.splitledger.common.NotFoundException;
 import dev.splitledger.common.Sha256;
 import dev.splitledger.group.GroupDtos.MemberResponse;
 import dev.splitledger.group.GroupService;
+import dev.splitledger.ledger.CorrectionLog;
 import dev.splitledger.ledger.EntryKind;
 import dev.splitledger.ledger.LedgerService;
 import dev.splitledger.ledger.Posting;
@@ -46,15 +47,18 @@ public class SettlementService {
     private final LedgerService ledgerService;
     private final IdempotentCreator idempotentCreator;
     private final OutboxService outbox;
+    private final CorrectionLog corrections;
     private final JdbcTemplate jdbc;
 
     SettlementService(PaymentRepository payments, GroupService groupService, LedgerService ledgerService,
-                      IdempotentCreator idempotentCreator, OutboxService outbox, JdbcTemplate jdbc) {
+                      IdempotentCreator idempotentCreator, OutboxService outbox, CorrectionLog corrections,
+                      JdbcTemplate jdbc) {
         this.payments = payments;
         this.groupService = groupService;
         this.ledgerService = ledgerService;
         this.idempotentCreator = idempotentCreator;
         this.outbox = outbox;
+        this.corrections = corrections;
         this.jdbc = jdbc;
     }
 
@@ -81,10 +85,14 @@ public class SettlementService {
                           join ledger_entry reversal on reversal.reference_id = original.id and reversal.kind = 'REVERSAL'
                           where original.kind = 'EXPENSE' and original.reference_id = e.id)
                     union all
-                    -- a payment reduces what the payer owes the receiver
+                    -- a payment reduces what the payer owes the receiver, unless it was undone
                     select p.from_member_id, p.to_member_id, -p.amount_cents
                     from payment p
                     where p.group_id = ?
+                      and not exists (
+                          select 1 from ledger_entry original
+                          join ledger_entry reversal on reversal.reference_id = original.id and reversal.kind = 'REVERSAL'
+                          where original.kind = 'PAYMENT' and original.reference_id = p.id)
                 ), per_pair as (
                     -- one row per pair (lower id first), signed: positive means "low owes high"
                     select least(debtor, creditor) as low, greatest(debtor, creditor) as high,
@@ -165,7 +173,29 @@ public class SettlementService {
 
     @Transactional(readOnly = true)
     public List<PaymentResponse> list(long groupId) {
-        return payments.findByGroupIdOrderByIdDesc(groupId).stream().map(PaymentResponse::from).toList();
+        Map<Long, CorrectionLog.Entry> undone = corrections.undonePayments(groupId);
+        return payments.findByGroupIdOrderByIdDesc(groupId).stream()
+                .map(p -> PaymentResponse.from(p, undone.get(p.getId())))
+                .toList();
+    }
+
+    /**
+     * Undoes a payment recorded by mistake: reversing ledger entries cancel it, the payment row
+     * stays, and the correction log records who undid it. At most once (409 afterwards).
+     */
+    @Transactional
+    public PaymentResponse undo(long groupId, long paymentId, long memberId) {
+        Payment payment = payments.findByIdAndGroupId(paymentId, groupId)
+                .orElseThrow(() -> new NotFoundException("Payment " + paymentId + " not found in group " + groupId));
+        List<Posting> reversal = ledgerService.reverse(groupId, EntryKind.PAYMENT, paymentId).stream()
+                .map(entry -> new Posting(entry.getMemberId(), entry.getAmountCents()))
+                .toList();
+        // Same date as the payment's own event, so the statement worker books it in the same month.
+        outbox.record(EventType.PAYMENT_REVERSED, groupId, paymentId,
+                LocalDate.ofInstant(payment.getCreatedAt(), GROUP_TIME_ZONE),
+                payment.getNote() != null ? payment.getNote() : "Settle-up payment", payment.getAmountCents(), reversal);
+        corrections.paymentUndone(groupId, paymentId, memberId);
+        return PaymentResponse.from(payment, corrections.undonePayments(groupId).get(paymentId));
     }
 
     private Optional<PaymentResponse> findEarlier(long groupId, String idempotencyKey, String requestHash) {
@@ -174,7 +204,7 @@ public class SettlementService {
                 throw new ConflictException(
                         "Idempotency-Key '" + idempotencyKey + "' was already used with a different request body");
             }
-            return PaymentResponse.from(payment);
+            return PaymentResponse.from(payment, corrections.undonePayments(groupId).get(payment.getId()));
         });
     }
 
@@ -195,6 +225,6 @@ public class SettlementService {
         outbox.record(EventType.PAYMENT_RECORDED, groupId, payment.getId(),
                 LocalDate.ofInstant(payment.getCreatedAt(), GROUP_TIME_ZONE),
                 request.note() != null ? request.note() : "Settle-up payment", request.amountCents(), postings);
-        return PaymentResponse.from(payment);
+        return PaymentResponse.from(payment, null);
     }
 }

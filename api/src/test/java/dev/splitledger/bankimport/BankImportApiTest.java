@@ -186,6 +186,31 @@ class BankImportApiTest extends IntegrationTest {
                 .isEqualTo(8);
     }
 
+    @Test
+    void sharingCanChangePayerAmountAndDate() throws IOException {
+        upload(FILE_A);
+        long drinks = candidateId("Getränke Hoffmann KG");
+
+        // Only 20,00 of the 27,90 receipt was for the group, Ben paid Anna back in cash at the
+        // till, and it is entered for the party date.
+        MvcTestResult confirmed = mvc.post().uri("/groups/{g}/bank-transactions/{t}/confirmation", groupId, drinks)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"description": "Party drinks", "splitMode": "EQUAL",
+                         "participants": [{"memberId": %d}, {"memberId": %d}],
+                         "payerId": %d, "amountCents": 2000, "expenseDate": "2026-03-05"}
+                        """.formatted(anna, ben, ben))
+                .exchange();
+
+        assertThat(confirmed).hasStatus(201);
+        assertThat(confirmed).bodyJson().extractingPath("$.payerId").asNumber().isEqualTo((int) ben);
+        assertThat(confirmed).bodyJson().extractingPath("$.amountCents").isEqualTo(2000);
+        assertThat(confirmed).bodyJson().extractingPath("$.expenseDate").isEqualTo("2026-03-05");
+        assertThat(confirmed).bodyJson().extractingPath("$.description").isEqualTo("Party drinks");
+        assertThat(confirmed).bodyJson().extractingPath("$.bankPurpose").isEqualTo("Getränke WG-Party Rechnung 2026-117");
+        assertThat(candidates()).hasSize(7);
+    }
+
     private MvcTestResult upload(String sampleName) throws IOException {
         return mvc.post().uri("/groups/{g}/imports", groupId)
                 .multipart().file("file", sample(sampleName))

@@ -158,6 +158,8 @@ button.wide { width: 100%; }
 .rows li:first-child { border-top: none; }
 .rows .reversed strong { text-decoration: line-through; color: var(--muted); }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+/* Small row buttons (Edit, Delete, Undo) next to an amount. */
+button.compact { padding: 4px 10px; font-size: 0.85rem; }
 .avatar {
   display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 50%;
   background: var(--primary-soft); color: var(--primary); font-weight: 700; font-size: 0.85rem;

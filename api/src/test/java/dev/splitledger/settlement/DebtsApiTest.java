@@ -58,6 +58,30 @@ class DebtsApiTest extends IntegrationTest {
     }
 
     @Test
+    void undoingAPaymentBringsTheDebtBackAndKeepsItInTheList() {
+        createExpense(groupId, lucy, 2000, "Dinner", madni, lucy); // Madni owes Lucy 10,00
+        long payment = longAt(payResult(madni, lucy, 1000), "$.id");
+        assertThat(debts()).isEmpty();
+
+        MvcTestResult undone = mvc.post().uri("/groups/{g}/payments/{p}/reversal", groupId, payment).exchange();
+
+        assertThat(undone).hasStatusOk();
+        assertThat(undone).bodyJson().extractingPath("$.reversed").isEqualTo(true);
+        assertThat(undone).bodyJson().extractingPath("$.undoneBy").asNumber().isEqualTo((int) madni);
+        assertThat(debts()).containsExactly(List.of(madni, lucy, 1000L));
+        assertThat(mvc.get().uri("/groups/{g}/balances", groupId))
+                .bodyJson().extractingPath("$.balances[?(@.memberId == %d)].balanceCents".formatted(lucy))
+                .asArray().containsExactly(1000);
+        assertThat(mvc.get().uri("/groups/{g}/payments", groupId)).bodyJson()
+                .extractingPath("$[0].reversed").isEqualTo(true);
+
+        // Once is enough; another group cannot touch it.
+        assertThat(mvc.post().uri("/groups/{g}/payments/{p}/reversal", groupId, payment)).hasStatus(409);
+        long otherGroup = createGroup("Other");
+        assertThat(mvc.post().uri("/groups/{g}/payments/{p}/reversal", otherGroup, payment)).hasStatus(404);
+    }
+
+    @Test
     void reversedExpensesDoNotCount() {
         long expense = createExpense(groupId, lucy, 3000, "Wrong", madni, tim, lucy);
         mvc.post().uri("/groups/{g}/expenses/{e}/reversal", groupId, expense).exchange();
@@ -123,10 +147,14 @@ class DebtsApiTest extends IntegrationTest {
     }
 
     private void pay(long from, long to, long cents) {
-        assertThat(mvc.post().uri("/groups/{g}/payments", groupId)
+        assertThat(payResult(from, to, cents)).hasStatus(201);
+    }
+
+    private MvcTestResult payResult(long from, long to, long cents) {
+        return mvc.post().uri("/groups/{g}/payments", groupId)
                 .header("Idempotency-Key", java.util.UUID.randomUUID().toString())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"fromMemberId\": %d, \"toMemberId\": %d, \"amountCents\": %d}".formatted(from, to, cents)))
-                .hasStatus(201);
+                .content("{\"fromMemberId\": %d, \"toMemberId\": %d, \"amountCents\": %d}".formatted(from, to, cents))
+                .exchange();
     }
 }

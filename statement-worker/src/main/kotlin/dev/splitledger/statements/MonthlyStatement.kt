@@ -8,7 +8,7 @@ import java.time.YearMonth
  * Summary of one group's month, stored as JSON in S3 and updated event by event.
  *
  * Amounts are integer cents, like everywhere in SplitLedger. A reversal subtracts what its
- * expense added, so the month shows what is still valid.
+ * expense added and undoing a payment subtracts the payment, so the month shows what is still valid.
  */
 @Serializable
 data class MonthlyStatement(
@@ -19,6 +19,8 @@ data class MonthlyStatement(
     /** Sum of the month's expenses minus reversed ones. */
     val expensesCents: Long = 0,
     val paymentCount: Int = 0,
+    val undonePaymentCount: Int = 0,
+    /** Sum of the month's payments minus undone ones. */
     val paymentsCents: Long = 0,
     val members: List<MemberLine> = emptyList(),
     /** Highest event applied; events arrive in order per group, so anything not newer is a repeat. */
@@ -39,13 +41,22 @@ data class MonthlyStatement(
             val line = byMember[posting.memberId] ?: MemberLine(posting.memberId, posting.displayName)
             byMember[posting.memberId] = line.with(event.type, posting)
         }
-        val sign = if (event.type == EventType.EXPENSE_REVERSED) -1 else 1
+        val type = event.type
         return copy(
-            expenseCount = expenseCount + if (event.type == EventType.EXPENSE_RECORDED) 1 else 0,
-            reversedExpenseCount = reversedExpenseCount + if (event.type == EventType.EXPENSE_REVERSED) 1 else 0,
-            expensesCents = expensesCents + if (event.type == EventType.PAYMENT_RECORDED) 0 else sign * event.amountCents,
-            paymentCount = paymentCount + if (event.type == EventType.PAYMENT_RECORDED) 1 else 0,
-            paymentsCents = paymentsCents + if (event.type == EventType.PAYMENT_RECORDED) event.amountCents else 0,
+            expenseCount = expenseCount + if (type == EventType.EXPENSE_RECORDED) 1 else 0,
+            reversedExpenseCount = reversedExpenseCount + if (type == EventType.EXPENSE_REVERSED) 1 else 0,
+            expensesCents = expensesCents + when (type) {
+                EventType.EXPENSE_RECORDED -> event.amountCents
+                EventType.EXPENSE_REVERSED -> -event.amountCents
+                else -> 0
+            },
+            paymentCount = paymentCount + if (type == EventType.PAYMENT_RECORDED) 1 else 0,
+            undonePaymentCount = undonePaymentCount + if (type == EventType.PAYMENT_REVERSED) 1 else 0,
+            paymentsCents = paymentsCents + when (type) {
+                EventType.PAYMENT_RECORDED -> event.amountCents
+                EventType.PAYMENT_REVERSED -> -event.amountCents
+                else -> 0
+            },
             members = byMember.values.sortedBy { it.memberId },
             lastEventId = event.eventId,
         )
@@ -85,6 +96,10 @@ data class MemberLine(
                 if (cents < 0) copy(paidCents = paidCents + cents) else copy(shareCents = shareCents - cents)
             EventType.PAYMENT_RECORDED ->
                 if (cents > 0) copy(paymentsSentCents = paymentsSentCents + cents)
+                else copy(paymentsReceivedCents = paymentsReceivedCents - cents)
+            // Undoing mirrors the payment: -sent for the sender, -received for the receiver.
+            EventType.PAYMENT_REVERSED ->
+                if (cents < 0) copy(paymentsSentCents = paymentsSentCents + cents)
                 else copy(paymentsReceivedCents = paymentsReceivedCents - cents)
         }
         return updated.copy(

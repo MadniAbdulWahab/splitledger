@@ -28,6 +28,8 @@ async function walkthrough(name, options) {
   const page = await context.newPage();
   page.on('pageerror', (e) => problems.push(`${name}: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error') problems.push(`${name}: console: ${m.text()}`); });
+  // "Delete …?" and "Undo …?" confirmations: answer yes.
+  page.on('dialog', (d) => void d.accept());
   const shot = async (step) => { if (shots) await page.screenshot({ path: `${shots}/${name}-${step}.png`, fullPage: true }); };
 
   await page.goto(base);
@@ -111,13 +113,19 @@ async function walkthrough(name, options) {
   check((await page.locator('.rows li', { hasText: 'Ben paid Anna Beispiel' }).first().innerText()).includes('62,00'),
     'recent payments list Ben paid 62,00');
 
-  // Bank import: 8 outgoing payments become private candidates; share one.
+  // Bank import: 8 outgoing payments become private candidates. Share opens the form filled in
+  // from the bank, where payer, date and split can still be changed.
   await page.getByRole('tab', { name: /Bank/ }).click();
   await page.locator('input[type=file]').setInputFiles(csv);
   await page.getByText('8 new · 0 already imported · 1 skipped').waitFor();
   await shot('5-bank');
   await page.locator('li', { hasText: 'EDEKA Center Bonn' }).getByRole('button', { name: 'Share' }).click();
-  await page.getByText('Shared equally with everyone').waitFor();
+  await page.getByRole('heading', { name: 'Share a bank payment' }).waitFor();
+  check(await page.getByLabel('What for?').inputValue() === 'EDEKA Center Bonn', 'share form takes the name from the bank');
+  check(await page.getByLabel('Amount (€)').inputValue() === '54,12', 'share form takes the amount from the bank');
+  await shot('5b-share-form');
+  await page.getByRole('button', { name: /^Share 54,12/ }).click();
+  await page.getByText('Shared “EDEKA Center Bonn” with the group').waitFor();
 
   // History shows everything without searching; search narrows it, Clear brings it back.
   await page.getByRole('tab', { name: 'History' }).click();
@@ -152,6 +160,30 @@ async function walkthrough(name, options) {
   check((await page.locator('.payment', { hasText: 'You owe Lucy' }).innerText()).includes('10,00'), 'you owe Lucy 10,00');
   check((await page.locator('.payment', { hasText: 'Ben owes you' }).innerText()).includes('27,06'), 'Ben owes you 27,06');
   await shot('8-who-owes-whom');
+
+  // Corrections: undo Ben's payment, delete the train, edit EDEKA down to 50,00. Nothing
+  // disappears; the old entries stay crossed out with who changed them.
+  await page.getByRole('tab', { name: 'History' }).click();
+  await page.getByRole('button', { name: /^Payments/ }).click();
+  await page.locator('.rows li', { hasText: 'Ben paid Anna Beispiel' }).getByRole('button', { name: 'Undo' }).click();
+  await page.getByText('Payment undone').waitFor();
+  await page.getByText('undone by Anna Beispiel').waitFor();
+  await page.getByRole('button', { name: 'Expenses' }).click();
+  const trainRow = page.locator('.rows li', { hasText: 'Train' });
+  await trainRow.getByRole('button', { name: 'Delete' }).click();
+  await page.getByText('Deleted “Train”').waitFor();
+  await trainRow.getByText(/deleted by Anna Beispiel/).waitFor();
+  await page.locator('.rows li', { hasText: 'EDEKA Center Bonn' }).getByRole('button', { name: 'Edit' }).click();
+  await page.getByRole('heading', { name: 'Edit expense' }).waitFor();
+  await page.getByLabel('Amount (€)').fill('50,00');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await page.getByText('Expense updated').waitFor();
+  check(await page.getByText('You owe Lucy').count() === 0, 'deleted train no longer counts');
+  // 62,00 again after the undo, plus half of the edited 50,00.
+  check((await page.locator('.payment', { hasText: 'Ben owes you' }).innerText()).includes('87,00'), 'Ben owes you 87,00 after the corrections');
+  await page.getByRole('tab', { name: 'History' }).click();
+  await page.getByText(/old version, edited by Anna Beispiel/).waitFor();
+  await shot('9-corrections');
 
   // On a phone the tabs are a bar at the bottom edge of the screen.
   if (options.viewport.width < 640) {

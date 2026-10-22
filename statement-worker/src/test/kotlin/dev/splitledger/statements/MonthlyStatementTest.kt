@@ -69,6 +69,22 @@ class MonthlyStatementTest {
     }
 
     @Test
+    fun `undoing a payment takes it back out`() {
+        val payment = payment(2, 500)
+        val undo = payment.copy(eventId = 3, type = EventType.PAYMENT_REVERSED,
+            postings = payment.postings.map { it.copy(amountCents = -it.amountCents) })
+        val statement = MonthlyStatement.emptyFor(expense(1)).apply(expense(1)).apply(payment).apply(undo)
+
+        assertEquals(1, statement.paymentCount)
+        assertEquals(1, statement.undonePaymentCount)
+        assertEquals(0, statement.paymentsCents)
+        assertEquals(1000, statement.expensesCents)
+        assertTrue(statement.members.all { it.paymentsSentCents == 0L && it.paymentsReceivedCents == 0L })
+        // Back to the state after the expense: Ben owes Anna 5.00 again.
+        assertEquals(500, statement.members.first { it.memberId == ANNA }.netChangeCents)
+    }
+
+    @Test
     fun `net changes of all members always sum to zero`() {
         var statement = MonthlyStatement.emptyFor(expense(1))
         val events = listOf(expense(1, 999), expense(2, 4321), payment(3, 1234), expense(4, 17))

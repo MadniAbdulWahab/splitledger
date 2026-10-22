@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  Api, register, type Balance, type BankTransaction, type ExpenseHit, type Me, type Member, type PaymentRecord,
-  type SuggestedPayment,
+  Api, register, type Balance, type BankTransaction, type Expense, type ExpenseBody, type ExpenseHit, type Me,
+  type Member, type PaymentRecord, type SplitMode, type SuggestedPayment,
 } from './api';
 import { localToday } from './ids';
 import { formatCents, parseEuroToCents } from './money';
@@ -226,6 +226,13 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
   const [paid, setPaid] = useState<PaymentRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+
+  /** Opens the Add tab, empty or filled with a bank payment or an expense to edit. */
+  function openForm(next: Draft | null) {
+    setDraft(next);
+    setTab('add');
+  }
 
   const reload = useCallback(async () => {
     const [m, b, d, s, c, p] = await Promise.all([
@@ -269,12 +276,13 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
                 : 'You are all settled'}
           </p>
         </div>
-        <button className="primary" onClick={() => setTab('add')}>+ Add expense</button>
+        <button className="primary" onClick={() => openForm(null)}>+ Add expense</button>
       </section>
 
       <nav className="tabs" role="tablist">
         {TABS.map((t) => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'active' : ''} onClick={() => setTab(t.id)}>
+          <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'active' : ''}
+            onClick={() => (t.id === 'add' ? openForm(tab === 'add' ? draft : null) : (setDraft(null), setTab(t.id)))}>
             <span className="tab-icon">
               <TabIcon tab={t.id} />
               {t.id === 'bank' && candidates.length > 0 && <span className="badge">{candidates.length}</span>}
@@ -296,9 +304,19 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
       )}
 
       {tab === 'add' && (
-        <ExpenseForm members={members} myMemberId={myMemberId}
-          onSubmit={(body) => run(() => api.addExpense(groupId, body), 'Expense added')}
-          onDone={() => setTab('overview')} />
+        <ExpenseForm key={draft === null ? 'new' : `${draft.kind}-${draft.kind === 'bank' ? draft.transaction.id : draft.expense.id}`}
+          members={members} myMemberId={myMemberId} draft={draft}
+          onSubmit={(body) => (draft?.kind === 'bank'
+            ? run(() => api.confirm(groupId, draft.transaction.id, body), `Shared “${body.description}” with the group`)
+            : draft?.kind === 'edit'
+              ? run(() => api.editExpense(groupId, draft.expense.id, body), 'Expense updated')
+              : run(() => api.addExpense(groupId, body), 'Expense added'))}
+          onCancel={draft === null ? undefined : () => {
+            const back: Tab = draft.kind === 'bank' ? 'bank' : 'history';
+            setDraft(null);
+            setTab(back);
+          }}
+          onDone={() => { setDraft(null); setTab('overview'); }} />
       )}
 
       {tab === 'bank' && (
@@ -331,7 +349,7 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
                     </div>
                     <span className="amount">{formatCents(-t.amountCents)}</span>
                     <div className="actions">
-                      <button className="primary" onClick={() => run(() => api.confirm(groupId, t.id, members.map((m) => m.id)), 'Shared equally with everyone')}>Share</button>
+                      <button className="primary" onClick={() => openForm({ kind: 'bank', transaction: t })}>Share</button>
                       <button className="ghost" onClick={() => run(() => api.ignore(groupId, t.id))}>Ignore</button>
                     </div>
                   </li>
@@ -341,7 +359,12 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
         </div>
       )}
 
-      {tab === 'history' && <History api={api} groupId={groupId} members={members} payments={paid} />}
+      {tab === 'history' && (
+        <History api={api} groupId={groupId} members={members} payments={paid}
+          onEdit={(id) => void run(async () => openForm({ kind: 'edit', expense: await api.getExpense(groupId, id) }))}
+          onDelete={(h) => run(() => api.deleteExpense(groupId, h.id), `Deleted “${h.description}”`)}
+          onUndo={(p) => run(() => api.undoPayment(groupId, p.id), 'Payment undone')} />
+      )}
 
       {tab === 'members' && (
         <div className="columns">
@@ -380,7 +403,11 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
   );
 }
 
-type SplitMode = 'EQUAL' | 'EXACT' | 'SHARES';
+/** What the Add tab is filled with: a bank payment to share or an expense to edit. */
+type Draft =
+  | { kind: 'bank'; transaction: BankTransaction }
+  | { kind: 'edit'; expense: Expense };
+
 const SPLIT_MODES: { id: SplitMode; label: string; hint: string }[] = [
   { id: 'EQUAL', label: 'Equally', hint: 'Everyone selected pays the same.' },
   { id: 'EXACT', label: 'Exact amounts', hint: 'Enter what each person owes; it has to add up to the total.' },
@@ -512,17 +539,46 @@ function DebtRow({ api, groupId, debt, myMemberId, myIban, onSettled }: {
   );
 }
 
-function ExpenseForm({ members, myMemberId, onSubmit, onDone }: {
-  members: Member[]; myMemberId: number; onSubmit: (body: unknown) => Promise<boolean>; onDone: () => void;
+/** Form values for a new expense, a bank payment to share, or an expense to edit. */
+function initialValues(draft: Draft | null, myMemberId: number, members: Member[]) {
+  const blank = {
+    description: '', amount: '', date: localToday(), payerId: myMemberId, mode: 'EQUAL' as SplitMode,
+    excluded: [] as number[], exact: {} as Record<number, string>, shares: {} as Record<number, string>,
+    notes: null as string | null,
+  };
+  if (draft?.kind === 'bank') {
+    const t = draft.transaction;
+    return { ...blank, description: (t.counterpartyName ?? 'Bank payment').slice(0, 200), amount: formatPlain(-t.amountCents), date: t.bookingDate };
+  }
+  if (draft?.kind === 'edit') {
+    const e = draft.expense;
+    const shareOf = (id: number) => e.shares.find((s) => s.memberId === id);
+    return {
+      ...blank, description: e.description, amount: formatPlain(e.amountCents), date: e.expenseDate,
+      payerId: e.payerId, mode: e.splitMode, notes: e.notes,
+      excluded: e.splitMode === 'EQUAL' ? members.map((m) => m.id).filter((id) => !shareOf(id)) : [],
+      exact: e.splitMode === 'EXACT'
+        ? Object.fromEntries(e.shares.map((s) => [s.memberId, formatPlain(s.amountCents)])) : {},
+      shares: e.splitMode === 'SHARES'
+        ? Object.fromEntries(members.map((m) => [m.id, String(shareOf(m.id)?.shareUnits ?? 0)])) : {},
+    };
+  }
+  return blank;
+}
+
+function ExpenseForm({ members, myMemberId, draft, onSubmit, onDone, onCancel }: {
+  members: Member[]; myMemberId: number; draft: Draft | null;
+  onSubmit: (body: ExpenseBody) => Promise<boolean>; onDone: () => void; onCancel?: () => void;
 }) {
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(localToday);
-  const [payerId, setPayerId] = useState(myMemberId);
-  const [mode, setMode] = useState<SplitMode>('EQUAL');
-  const [excluded, setExcluded] = useState<number[]>([]);
-  const [exact, setExact] = useState<Record<number, string>>({});
-  const [shares, setShares] = useState<Record<number, string>>({});
+  const [initial] = useState(() => initialValues(draft, myMemberId, members));
+  const [description, setDescription] = useState(initial.description);
+  const [amount, setAmount] = useState(initial.amount);
+  const [date, setDate] = useState(initial.date);
+  const [payerId, setPayerId] = useState(initial.payerId);
+  const [mode, setMode] = useState<SplitMode>(initial.mode);
+  const [excluded, setExcluded] = useState<number[]>(initial.excluded);
+  const [exact, setExact] = useState<Record<number, string>>(initial.exact);
+  const [shares, setShares] = useState<Record<number, string>>(initial.shares);
   const total = parseEuroToCents(amount);
   const name = (id: number) => members.find((m) => m.id === id)?.displayName ?? '?';
 
@@ -582,7 +638,9 @@ function ExpenseForm({ members, myMemberId, onSubmit, onDone }: {
       : mode === 'EXACT'
         ? allocations.map((a) => ({ memberId: a.memberId, value: a.cents }))
         : members.filter((m) => (shareUnits.get(m.id) ?? 0) > 0).map((m) => ({ memberId: m.id, value: shareUnits.get(m.id) }));
-    const ok = await onSubmit({ payerId, amountCents: total, description, expenseDate: date, splitMode: mode, participants });
+    const ok = await onSubmit({
+      payerId, amountCents: total, description, notes: initial.notes, expenseDate: date, splitMode: mode, participants,
+    });
     if (ok) {
       setDescription('');
       setAmount('');
@@ -593,7 +651,18 @@ function ExpenseForm({ members, myMemberId, onSubmit, onDone }: {
 
   return (
     <form className="card stack" onSubmit={submit}>
-      <h2>Add an expense</h2>
+      <div>
+        <h2>{draft?.kind === 'bank' ? 'Share a bank payment' : draft?.kind === 'edit' ? 'Edit expense' : 'Add an expense'}</h2>
+        {draft?.kind === 'bank' && (
+          <p className="muted small">
+            From your bank: {formatDate(draft.transaction.bookingDate)} · {formatCents(-draft.transaction.amountCents)}
+            {draft.transaction.purpose ? ` · ${draft.transaction.purpose}` : ''}. Change anything that differs, e.g. only part of the receipt was shared.
+          </p>
+        )}
+        {draft?.kind === 'edit' && (
+          <p className="muted small">Saving replaces the old version. It stays in the history, crossed out, with your name.</p>
+        )}
+      </div>
       <div className="form-grid">
         <Field label="What for?">
           <input value={description} onChange={(e) => setDescription(e.target.value)} required maxLength={200} placeholder="e.g. Groceries" />
@@ -663,8 +732,10 @@ function ExpenseForm({ members, myMemberId, onSubmit, onDone }: {
 
       {problem && amount !== '' && <p className="muted small">{problem}</p>}
       <button className="primary wide" disabled={problem !== null}>
-        Add {total !== null ? formatCents(total) : 'expense'}
+        {draft?.kind === 'edit' ? 'Save changes'
+          : `${draft?.kind === 'bank' ? 'Share' : 'Add'} ${total !== null ? formatCents(total) : 'expense'}`}
       </button>
+      {onCancel && <button type="button" className="ghost wide" onClick={onCancel}>Cancel</button>}
     </form>
   );
 }
@@ -674,9 +745,25 @@ function formatPlain(cents: number): string {
   return `${Math.floor(cents / 100)},${String(cents % 100).padStart(2, '0')}`;
 }
 
-/** Expenses (newest first, 20 at a time, searchable) and recorded payments. */
-function History({ api, groupId, members, payments }:
-  { api: Api; groupId: number; members: Member[]; payments: PaymentRecord[] }) {
+/** " · deleted by Ben, 23.10.2026, 14:05" and similar: who changed a history row, if anyone. */
+function changeNote(h: ExpenseHit, names: Map<number, string>): string {
+  const who = h.changedBy !== null ? ` by ${names.get(h.changedBy) ?? '?'}` : '';
+  const when = h.changedAt ? `, ${formatDateTime(h.changedAt)}` : '';
+  if (h.change === 'DELETED') return ` · deleted${who}${when}`;
+  if (h.change === 'EDITED') return ` · old version, edited${who}${when}`;
+  if (h.reversed) return ' · deleted';
+  return h.replacesExpenseId !== null ? ' · edited' : '';
+}
+
+/**
+ * Expenses (newest first, 20 at a time, searchable) and recorded payments. Edit, delete and undo
+ * never remove anything: the old version stays, crossed out, with who changed it.
+ */
+function History({ api, groupId, members, payments, onEdit, onDelete, onUndo }: {
+  api: Api; groupId: number; members: Member[]; payments: PaymentRecord[];
+  onEdit: (expenseId: number) => void; onDelete: (hit: ExpenseHit) => Promise<boolean>;
+  onUndo: (payment: PaymentRecord) => Promise<boolean>;
+}) {
   const [view, setView] = useState<'expenses' | 'payments'>('expenses');
   const [query, setQuery] = useState('');
   const [activeQuery, setActiveQuery] = useState('');
@@ -714,7 +801,10 @@ function History({ api, groupId, members, payments }:
       {view === 'payments' && (
         payments.length === 0
           ? <Empty title="No payments yet" text="When someone settles up and marks it as paid, it appears here." />
-          : <PaymentList payments={payments} names={names} />
+          : <PaymentList payments={payments} names={names} onUndo={(p) => {
+            const text = `Undo “${names.get(p.fromMemberId) ?? '?'} paid ${names.get(p.toMemberId) ?? '?'} ${formatCents(p.amountCents)}”? The debt comes back.`;
+            if (window.confirm(text)) void onUndo(p);
+          }} />
       )}
 
       {view === 'expenses' && (
@@ -742,10 +832,20 @@ function History({ api, groupId, members, payments }:
                   <div className="grow">
                     <strong>{h.description}</strong>
                     <span className="muted small">
-                      {formatDate(h.expenseDate)} · paid by {names.get(h.payerId) ?? '?'}{h.reversed ? ' · reversed' : ''}
+                      {formatDate(h.expenseDate)} · paid by {names.get(h.payerId) ?? '?'}{changeNote(h, names)}
                     </span>
                   </div>
                   <span className="amount">{formatCents(h.amountCents)}</span>
+                  {!h.reversed && (
+                    <div className="actions">
+                      <button className="ghost compact" onClick={() => onEdit(h.id)}>Edit</button>
+                      <button className="ghost compact" onClick={() => {
+                        if (window.confirm(`Delete “${h.description}”? It stays in the history, crossed out.`)) {
+                          void onDelete(h).then((ok) => { if (ok) void load(activeQuery); });
+                        }
+                      }}>Delete</button>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>
@@ -759,19 +859,25 @@ function History({ api, groupId, members, payments }:
   );
 }
 
-function PaymentList({ payments, names }: { payments: PaymentRecord[]; names: Map<number, string> }) {
+function PaymentList({ payments, names, onUndo }: {
+  payments: PaymentRecord[]; names: Map<number, string>; onUndo?: (payment: PaymentRecord) => void;
+}) {
   return (
     <ul className="rows">
       {payments.map((p) => (
-        <li key={p.id}>
+        <li key={p.id} className={p.reversed ? 'reversed' : ''}>
           <span className="avatar">{initials(names.get(p.fromMemberId) ?? '?')}</span>
           <span className="arrow" aria-hidden="true">→</span>
           <span className="avatar">{initials(names.get(p.toMemberId) ?? '?')}</span>
           <div className="grow">
             <strong>{names.get(p.fromMemberId) ?? '?'} paid {names.get(p.toMemberId) ?? '?'}</strong>
-            <span className="muted small">{formatDateTime(p.createdAt)}{p.note ? ` · ${p.note}` : ''}</span>
+            <span className="muted small">
+              {formatDateTime(p.createdAt)}{p.note ? ` · ${p.note}` : ''}
+              {p.reversed ? ` · undone${p.undoneBy !== null ? ` by ${names.get(p.undoneBy) ?? '?'}` : ''}` : ''}
+            </span>
           </div>
-          <span className="amount positive">{formatCents(p.amountCents)}</span>
+          <span className={`amount ${p.reversed ? '' : 'positive'}`}>{formatCents(p.amountCents)}</span>
+          {onUndo && !p.reversed && <button className="ghost compact" onClick={() => onUndo(p)}>Undo</button>}
         </li>
       ))}
     </ul>

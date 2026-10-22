@@ -5,6 +5,7 @@ import dev.splitledger.expense.SplitMode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
@@ -35,10 +36,18 @@ public final class BankImportDtos {
      * Turns a candidate into an expense paid by the account owner. {@code description} defaults to
      * the counterparty name; the bank's purpose text is kept with the expense and becomes searchable.
      */
+    /**
+     * Shares a bank payment. Payer, amount and date default to the account owner, the booked
+     * amount and the booking date; the web form sends them so the user can change them (for
+     * example when only part of a supermarket receipt was shared).
+     */
     public record ConfirmRequest(
             @Size(max = 200) String description,
             @Size(max = 2000) String notes,
             @NotNull SplitMode splitMode,
-            @NotEmpty @Size(max = 50) List<@Valid @NotNull ParticipantRequest> participants) {
+            @NotEmpty @Size(max = 50) List<@Valid @NotNull ParticipantRequest> participants,
+            Long payerId,
+            @Positive Long amountCents,
+            LocalDate expenseDate) {
     }
 }

@@ -13,4 +13,6 @@ interface PaymentRepository extends Repository<Payment, Long> {
     Optional<Payment> findByGroupIdAndIdempotencyKey(Long groupId, String idempotencyKey);
 
     List<Payment> findByGroupIdOrderByIdDesc(Long groupId);
+
+    Optional<Payment> findByIdAndGroupId(Long id, Long groupId);
 }

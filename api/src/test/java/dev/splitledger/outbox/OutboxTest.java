@@ -71,6 +71,27 @@ class OutboxTest extends IntegrationTest {
     }
 
     @Test
+    void undoingAPaymentWritesItsOppositePostings() {
+        long payment = longAt(mvc.post().uri("/groups/{g}/payments", groupId)
+                .header("Idempotency-Key", "outbox-undo")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"fromMemberId\": %d, \"toMemberId\": %d, \"amountCents\": 250}".formatted(ben, anna))
+                .exchange(), "$.id");
+        mvc.post().uri("/groups/{g}/payments/{p}/reversal", groupId, payment).exchange();
+
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "select event_type, payload::text as payload from outbox_event where group_id = ? order by id", groupId);
+
+        assertThat(rows).extracting(row -> row.get("event_type")).containsExactly("PAYMENT_RECORDED", "PAYMENT_REVERSED");
+        String reversed = (String) rows.get(1).get("payload");
+        assertThat((Integer) JsonPath.read(reversed, "$.referenceId")).isEqualTo((int) payment);
+        assertThat(JsonPath.<List<Integer>>read(reversed, "$.postings[*].amountCents")).containsExactly(-250, 250);
+        // Same day as the payment's own event, so the statement worker books both in one month.
+        assertThat((String) JsonPath.read(reversed, "$.occurredOn"))
+                .isEqualTo(JsonPath.read((String) rows.get(0).get("payload"), "$.occurredOn"));
+    }
+
+    @Test
     void rejectedRequestsWriteNoEvent() {
         mvc.post().uri("/groups/{g}/expenses", groupId)
                 .header("Idempotency-Key", "too-much")
