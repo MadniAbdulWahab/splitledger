@@ -298,3 +298,11 @@ finds "Lidl Bonn"). Groups 1 and 2 from day 4 were still in the database after t
 `/v3/api-docs`, HTTP redirects with 308 to HTTPS, `/actuator/health` 404 from outside, API port
 not reachable directly, registration 403 without and 201 with the code, API connected as
 `splitledger_app`. Not yet run on a real VM with a public domain (Let's Encrypt not exercised).
+
+**Screenshots** (2026-10-22): [CloudWatch dashboard](evidence/2026-10-22-cloudwatch-dashboard.png):
+26 requests in one minute during the demo, no 5xx; task CPU spiking at start-up then near 0 %,
+memory about 60 % of 0.5 GB; RDS CPU low with 10 connections (the Hikari pool size); all three
+alarms OK; the "failed or slow requests" table lists the first two requests after the deployment
+(`POST /users` 1131 ms, `POST /groups` 1006 ms), the JVM warming up on 0.25 vCPU. The two alarm
+emails arrived (ALARM at 16:32:12 UTC with the test reason, OK at 16:33:55 UTC); they are not
+committed because they contain the topic's unsubscribe link.
