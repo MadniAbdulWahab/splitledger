@@ -42,7 +42,7 @@ class SecurityConfig {
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                         .requestMatchers(HttpMethod.POST, "/users").permitAll()
                         // The web page itself is public; everything it does goes through the API with a token.
-                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/assets/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/assets/**", "/favicon.svg", "/favicon.ico").permitAll()
                         .requestMatchers("/groups/{groupId}", "/groups/{groupId}/**").access(groupMembership)
                         .anyRequest().authenticated())
                 .exceptionHandling(errors -> errors

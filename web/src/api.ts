@@ -1,3 +1,5 @@
+import { newIdempotencyKey } from './ids';
+
 // Thin client for the SplitLedger API. Every call sends the user's token; errors arrive as
 // RFC 9457 problem details and are turned into an ApiError with the server's explanation.
 
@@ -44,11 +46,11 @@ export class Api {
 
   // Every create sends a fresh Idempotency-Key, so a retried click never books twice.
   addExpense = (g: number, body: unknown) =>
-    this.json('POST', `/groups/${g}/expenses`, body, { 'Idempotency-Key': crypto.randomUUID() });
+    this.json('POST', `/groups/${g}/expenses`, body, { 'Idempotency-Key': newIdempotencyKey() });
   recordPayment = (g: number, p: SuggestedPayment) =>
     this.json('POST', `/groups/${g}/payments`,
       { fromMemberId: p.fromMemberId, toMemberId: p.toMemberId, amountCents: p.amountCents },
-      { 'Idempotency-Key': crypto.randomUUID() });
+      { 'Idempotency-Key': newIdempotencyKey() });
 
   search = (g: number, q: string) =>
     this.json<{ items: ExpenseHit[] }>('GET', `/groups/${g}/expenses/search?q=${encodeURIComponent(q)}&limit=20`);
