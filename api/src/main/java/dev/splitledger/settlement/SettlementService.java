@@ -3,6 +3,7 @@ package dev.splitledger.settlement;
 import dev.splitledger.common.BusinessRuleException;
 import dev.splitledger.common.ConflictException;
 import dev.splitledger.common.IdempotentCreator;
+import dev.splitledger.common.NotFoundException;
 import dev.splitledger.common.Sha256;
 import dev.splitledger.group.GroupDtos.MemberResponse;
 import dev.splitledger.group.GroupService;
@@ -19,8 +20,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -62,6 +66,25 @@ public class SettlementService {
                 })
                 .toList();
         return new SettlementResponse(groupId, suggestions);
+    }
+
+    /**
+     * GiroCode PNG for the currently suggested payment from one member to another, e.g.
+     * "SplitLedger settle-up WG Kessenich Oct 2026" as transfer text.
+     */
+    @Transactional(readOnly = true)
+    public byte[] giroCode(long groupId, long fromMemberId, long toMemberId) {
+        SuggestedPayment payment = suggest(groupId).payments().stream()
+                .filter(p -> p.fromMemberId() == fromMemberId && p.toMemberId() == toMemberId)
+                .findFirst()
+                .orElseThrow(() -> new NotFoundException(
+                        "No suggested payment from member " + fromMemberId + " to member " + toMemberId));
+        if (payment.toIban() == null) {
+            throw new BusinessRuleException(payment.toName() + " has not entered an IBAN in this group yet");
+        }
+        String month = YearMonth.now(GROUP_TIME_ZONE).format(DateTimeFormatter.ofPattern("MMM yyyy", Locale.ENGLISH));
+        String text = "SplitLedger settle-up " + groupService.getGroup(groupId).name() + " " + month;
+        return GiroCode.png(GiroCode.payload(payment.toName(), payment.toIban(), payment.toBic(), payment.amountCents(), text));
     }
 
     /**

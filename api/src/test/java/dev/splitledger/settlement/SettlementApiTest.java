@@ -65,6 +65,35 @@ class SettlementApiTest extends IntegrationTest {
     }
 
     @Test
+    void giroCodeEncodesTheSuggestedPaymentForABankingApp() throws Exception {
+        createExpense(groupId, anna, 4200, "Groceries", ben);
+
+        MvcTestResult png = mvc.get().uri("/groups/{g}/settlement/girocode?from={f}&to={t}", groupId, ben, anna).exchange();
+
+        assertThat(png).hasStatusOk().hasContentType(MediaType.IMAGE_PNG);
+        assertThat(png.getResponse().getHeader("Cache-Control")).contains("no-store");
+        String[] lines = GiroCodeTest.decode(png.getResponse().getContentAsByteArray()).split("\n", -1);
+        assertThat(lines[0]).isEqualTo("BCD");
+        assertThat(lines[4]).isEqualTo("TESTDEB1XXX");
+        assertThat(lines[5]).isEqualTo("Anna");
+        assertThat(lines[6]).isEqualTo("DE81000010000001234567");
+        assertThat(lines[7]).isEqualTo("EUR42.00");
+        assertThat(lines[10]).startsWith("SplitLedger settle-up Trip ");
+    }
+
+    @Test
+    void giroCodeNeedsAnIbanAndASuggestedPayment() {
+        createExpense(groupId, ben, 1000, "Ben paid", anna);
+
+        // Ben is owed money but has no IBAN in the group.
+        assertThat(mvc.get().uri("/groups/{g}/settlement/girocode?from={f}&to={t}", groupId, anna, ben))
+                .hasStatus(422).bodyJson().extractingPath("$.detail").asString().contains("IBAN");
+        // Nobody owes Cem anything.
+        assertThat(mvc.get().uri("/groups/{g}/settlement/girocode?from={f}&to={t}", groupId, anna, cem))
+                .hasStatus(404);
+    }
+
+    @Test
     void paymentsAreIdempotent() {
         MvcTestResult first = pay("pay-1", ben, anna, 1000);
         MvcTestResult retry = pay("pay-1", ben, anna, 1000);
