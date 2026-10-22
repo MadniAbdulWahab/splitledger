@@ -15,8 +15,10 @@ SplitLedger is a small ledger service for one group of friends that fixes exactl
    someone with database access changed anything.
 3. **Search the whole history, free.** German word forms ("Einkauf" finds "Einkäufe"), typos
    ("Pizerria") and filters, on PostgreSQL full-text and trigram indexes.
-4. **Settle up.** Suggested payments with the receiver's IBAN; recording one updates the ledger.
-   *Planned:* a GiroCode (EPC QR) per payment for German banking apps.
+4. **Settle with a scan.** "You owe Lucy 10,00 €" comes with a GiroCode (EPC QR) that German
+   banking apps scan; recording the payment updates the ledger.
+
+Friends use it through a small web page (desktop and phone) served by the same service.
 
 It is a personal project for a group of friends, not a payment service: no money is moved and no
 bank API is called. Deployed and verified on AWS; the stack is torn down between demos.
@@ -54,7 +56,8 @@ dated evidence of what ran is in [docs/verification.md](docs/verification.md).
 | Service | Java 21, Spring Boot 4.1, Spring Security (API tokens), Spring Data JPA, Flyway, springdoc-openapi |
 | Worker | Kotlin 2.4, kotlinx.serialization, AWS Lambda (java21, arm64), AWS SDK v2 |
 | Data | PostgreSQL 16: `tsvector` + GIN, `pg_trgm`, triggers, row locks, partial unique indexes |
-| Tests | JUnit, Testcontainers (PostgreSQL, ElasticMQ for SQS, S3Mock), concurrency tests; 131 API + 12 worker tests |
+| Web page | React 19, TypeScript, Vite; served by Spring Boot from the same origin, strict Content-Security-Policy |
+| Tests | JUnit, Testcontainers (PostgreSQL, ElasticMQ for SQS, S3Mock), concurrency tests, Vitest, a Playwright browser walkthrough in CI; 146 API + 12 worker + 27 web tests |
 | Infrastructure | Terraform 1.16, AWS provider 6: VPC, RDS, ECR, ECS Fargate, SQS, Lambda, S3, SSM, IAM, CloudWatch, SNS, Budgets |
 | Delivery | GitHub Actions (CI on every push, deploy via OIDC), Docker multi-stage image, non-root |
 
@@ -68,7 +71,7 @@ docker compose up --build     # API on http://localhost:8080, PostgreSQL on 127.
 scripts/demo.sh               # the whole story: two friends, imports, settle-up, verify, search
 ```
 
-Interactive API docs: http://localhost:8080/swagger-ui.html (register with `POST /users`, then use
+The web page is at http://localhost:8080. Interactive API docs: http://localhost:8080/swagger-ui.html (register with `POST /users`, then use
 the token with "Authorize"). Tests: `cd api && ./mvnw verify`.
 
 ## Deploy to AWS
@@ -113,6 +116,9 @@ prices:
 A demo session (apply, deploy, verify, destroy) costs a few cents. The account runs on the AWS
 Free plan (credits; the card is not charged), with a budget alert at 5 USD measured before credits.
 
+Measured: the stack ran for about six hours of building and testing on 2026-10-22, roughly
+0.30 USD, paid from the Free-plan credits.
+
 **Everyday use with friends costs nothing:** run it on an Oracle Cloud "Always Free" VM or any
 machine at home, as below. That split is the point: paying for hosting would defeat a project that
 exists to avoid paying for Splitwise Pro.
@@ -131,6 +137,10 @@ so tokens only travel over HTTPS. Registration requires a code you share with yo
    docker compose up -d --build
    ```
 3. `BASE_URL=https://<your-domain> REGISTRATION_CODE=<code> scripts/demo.sh` checks it end to end.
+
+On a machine at home you can skip the domain and the open ports: a free Cloudflare Tunnel
+(`cloudflared`) forwards an HTTPS address to the API without exposing your network. Serverless
+platforms such as Cloudflare Workers cannot run this service itself (a JVM with PostgreSQL).
 
 Back up the database regularly, for example `docker compose exec db pg_dump -U splitledger splitledger > backup.sql`.
 
@@ -154,7 +164,9 @@ Everything under `/groups/{id}` is only for members of that group (403 otherwise
 | `GET /groups/{id}/bank-transactions` | Your expense candidates (only you see your bank data) |
 | `POST /groups/{id}/bank-transactions/{tid}/confirmation`, `.../ignore` | Turn a candidate into a shared expense, or drop it |
 | `GET /groups/{id}/balances` | Net balance per member; positive means the group owes them |
-| `GET /groups/{id}/settlement` | Suggested payments that settle everyone, with the receiver's IBAN |
+| `GET /groups/{id}/debts` | Who owes whom, pair by pair (adds up to the balances) |
+| `GET /groups/{id}/settlement` | The fewest transfers that settle everyone (greedy), with the receiver's IBAN |
+| `GET /groups/{id}/settlement/girocode?from=&to=&amount=` | GiroCode PNG (EPC069-12) for a transfer between two members |
 | `POST /groups/{id}/payments`, `GET /groups/{id}/payments` | Record a settle-up payment (`Idempotency-Key`) and list them |
 | `GET /groups/{id}/verify` | Recompute the hash chain; report the first broken entry and the head hash |
 
@@ -188,4 +200,8 @@ appears in the logs.
 | AWS with Terraform, least-privilege IAM and database roles, budget alert | done (day 4) |
 | GitHub OIDC deploy pipeline, JSON logs, CloudWatch alarms and dashboard, free-host setup | done (day 5) |
 | Transactional outbox, SQS FIFO with DLQ, Kotlin Lambda writing monthly statements to S3 | done (day 6) |
-| GiroCode; small React page; CAMT.053 | planned (stretch) |
+| GiroCode, web page with splits, history, who owes whom; browser test in CI | done (day 7) |
+| CAMT.053 import; Lambda deployment through the pipeline; remote Terraform state | later |
+
+The AWS stack was destroyed after the evidence was recorded; `infra/app` recreates it in about
+ten minutes. "Used with friends" will only be claimed after a real month of use.

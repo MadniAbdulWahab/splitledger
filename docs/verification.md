@@ -347,3 +347,36 @@ DLQ at 17:29:17, and `splitledger-ledger-events-dlq` went to ALARM at 17:31:03 w
 `Successfully executed action ...:splitledger-alarms`. The DLQ held only that message
 (`{"note":"deliberately invalid event to test the dead-letter queue"}`) and was purged afterwards.
 The alarm returned to OK (about 17:38 UTC) after the purge.
+
+## 2026-10-22: day 7, GiroCode and the web page
+
+**Tests at the final commit `28e5dfb`:** API 146 tests, statement worker 12 tests, web 27 unit tests
+(money, idempotency keys, split rule incl. 5,000 random splits), all passing; CI run
+https://github.com/MadniAbdulWahab/splitledger/actions/runs/39855011411 green with five jobs
+(`test`, `statement-worker`, `web`, `docker-image`, `e2e`). New API tests: `GiroCodeTest` (payload
+line by line, field and byte limits with umlauts, invalid input, PNG decoded back with ZXing),
+GiroCode endpoint tests, payer-only expense rejected, `DebtsApiTest` (pairwise debts incl. the
+example "Madni owes Lucy 10, Tim owes Madni 5", netting, payments, reversals, randomized check that
+pairwise debts add up to the balances), web page and Content-Security-Policy access rules.
+
+**Found by trying it on AWS and fixed:** adding an expense failed on the plain-HTTP demo
+(`crypto.randomUUID is not a function`); fixed with a fallback and a test (decision 30). Feedback
+from use led to closable messages, a full history with payments, an icon bar on phones, exact and
+share splits, and the pairwise "who owes whom" view.
+
+**GiroCode on a phone:** the code shown by the AWS deployment was scanned with a Sparkasse banking
+app, which filled in receiver, IBAN, amount and transfer text (checked, not sent).
+
+**Final deployment** through the GitHub workflow: commit `28e5dfb`, task definition revision 11,
+image `28e5dfb0de06`. Against it, over plain HTTP:
+
+```
+npm run e2e -- http://18.185.110.237:8080      Walkthrough passed: desktop and phone
+scripts/demo.sh                                 exit 0, chain valid with 11 entries
+```
+
+Screenshots from AWS: [desktop](evidence/2026-10-22-web-page-on-aws.png),
+[phone, dark mode](evidence/2026-10-22-web-page-on-aws-phone.png).
+
+**Deploy history (all through GitHub OIDC):** 9 runs; the first two failed (trust policy subject,
+then the CI check), the seven after them succeeded.

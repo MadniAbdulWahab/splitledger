@@ -396,3 +396,61 @@ including FIFO) and Adobe S3Mock instead: open source, no account, started by Te
 The Lambda code is deployed by Terraform from the locally built jar (`source_code_hash` detects
 changes), while the API image goes through the GitHub pipeline. A second deploy step for the worker
 would follow the same pattern (role allowed `lambda:UpdateFunctionCode` on this one function).
+
+## 29. GiroCode (EPC QR) for settling up (2026-10-22)
+
+`GET /groups/{id}/settlement/girocode?from=&to=&amount=` returns a PNG following EPC069-12 version
+002: `BCD`, `002`, character set `1` (UTF-8), `SCT`, optional BIC, receiver name (max 70
+characters), IBAN, amount as `EUR42.00`, empty purpose and structured reference, transfer text
+"SplitLedger settle-up <group> <month>" (max 140 characters). The whole payload may have 331 bytes;
+since umlauts take two bytes in UTF-8, the free text is shortened until it fits. Error correction
+level M and a four-module quiet zone, as the guideline asks. Only ZXing's core module is used; the
+PNG is written with the JDK's ImageIO. Tests decode the PNG with ZXing's reader and compare it with
+the payload; a Sparkasse banking app scanned the code from the AWS demo and filled in the transfer.
+The response is `Cache-Control: no-store` because it contains an IBAN and a current amount.
+
+## 30. A small React page served by the API (2026-10-22)
+
+`web/` (Vite, React 19, TypeScript, versions pinned) is compiled in a Node stage of the Docker build
+and copied into Spring Boot's static folder, so page and API share one origin: no CORS, one
+deployment, the same image locally, on a free host and on AWS. The page is public; every request it
+makes carries the user's token, which is kept in localStorage. Against script injection a strict
+Content-Security-Policy allows scripts, connections and frames only from the server itself
+(`script-src 'self'`, `frame-ancestors 'none'`; `style-src` additionally allows inline styles,
+which Swagger UI and React style attributes need and which cannot run code). No UI library: a small
+CSS design system with light and dark mode, an icon bar at the bottom on phones, inline SVG icons.
+
+Lesson from AWS: `crypto.randomUUID()` only exists on secure pages (HTTPS or localhost). Locally
+everything worked; on the plain-HTTP demo adding an expense failed. Idempotency keys now fall back
+to a UUID built from `crypto.getRandomValues()`, with a test that simulates the insecure page.
+
+## 31. Splits in the page mirror the server's rule (2026-10-22)
+
+The form offers equal, exact-amount and share splits and shows every person's cents before saving.
+`web/src/split.ts` is a port of `SplitCalculator` (largest remainder, ties to the lower member id),
+tested with the same cases plus 5,000 random splits, so the preview and the stored result never
+differ. Exact amounts show what is left to assign, refuse to save until the total matches and can
+"split the rest" over the empty fields. The API now rejects an expense that only the payer shares
+(the payer's credit and own share would cancel out, nothing is shared), so the rule holds for the
+page, bank confirmations and any other client.
+
+## 32. Who owes whom: pairwise debts next to the simplified plan (2026-10-22)
+
+Net balances ("Madni -5, Tim -5, Lucy +10") are correct but do not answer what people ask: whom do I
+owe, and who owes me? `GET /groups/{id}/debts` computes debts per pair in one SQL query: every
+participant owes the payer their share, payments reduce it, reversed expenses do not count, and
+opposite debts between two people cancel. For each member the pairwise debts add up to exactly
+their ledger balance (checked by a randomized test), so the two views never contradict each other.
+
+The page leads with "You owe Lucy 10,00 €" / "Tim owes you 5,00 €" and offers the greedy plan of
+decision 15 only as a tip when it needs fewer transfers. The GiroCode endpoint accepts an amount so a
+creditor can show their own code for a debtor to scan.
+
+## 33. A browser test in CI (2026-10-22)
+
+`web/e2e/walkthrough.mjs` (playwright-core, driving the installed Chrome, no browser download) goes
+through the main path on desktop and on a phone in dark mode: register, create a group, invite,
+IBAN, payer-only refusal, equal and exact splits, GiroCode, payment, bank import, history with
+search and pagination, who owes whom, and that no JavaScript error occurs. CI starts the real
+stack with `docker compose up --wait` (PostgreSQL, API with the built page, least-privilege role)
+and runs it; on failure the screenshots and API logs are kept. The same script ran against AWS.
