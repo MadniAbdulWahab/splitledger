@@ -289,3 +289,58 @@ no permanent connection.
 Deployments stop the old task before starting the new one (`minimum_healthy_percent = 0`): a
 short gap is acceptable for a demo, and two versions never migrate at the same moment. The
 deployment circuit breaker rolls back a version that fails its health checks.
+
+## 22. Deploy pipeline: GitHub OIDC, Terraform owns infrastructure, the pipeline owns releases (2026-10-22)
+
+GitHub Actions gets AWS credentials through OIDC: GitHub signs a token per job, AWS checks it
+against the trust policy and returns a one-hour session. No access keys are stored in GitHub. The
+trust policy accepts only tokens whose `sub` is
+`repo:MadniAbdulWahab@105889425/splitledger@1427604325:environment:aws`, i.e. this repository
+(identified by its numeric ids, so a future repository with the same name does not match) and only
+jobs in the GitHub environment `aws`. The first attempt used the name-only format and was rejected;
+CloudTrail's `AssumeRoleWithWebIdentity` event showed the actual claim.
+
+The deploy role can push to this one ECR repository, register task definitions, update this one
+service, pass exactly the two task roles to ECS, and look up the task's IP for a smoke test. It
+cannot touch the network, the database or IAM; those change only through Terraform from a
+developer's machine. The service therefore ignores `task_definition` in Terraform; the workflow
+starts from the newest revision, so a Terraform change to the task definition (for example the
+JSON log setting) ships with the next deployment. Verified: revision 4, registered by the
+workflow, has both the new image and the variable Terraform added in revision 3.
+
+Deployments are started by hand and only for commits whose CI run succeeded (the workflow waits
+for it). An automatic deploy on every push would fail while the stack is destroyed, which is most
+of the time.
+
+## 23. Structured logs instead of a load balancer for HTTP metrics (2026-10-22)
+
+Without an ALB there are no per-request metrics from AWS. The API writes one JSON line per request
+(Spring Boot's built-in structured logging, Elastic Common Schema format) with `requestId`,
+`groupId`, `method`, `path`, `status` and `durationMs`; `requestId` and `groupId` are in the MDC,
+so every line written while handling a request carries them, and the response returns the id as
+`X-Request-Id`. CloudWatch metric filters (`{ $.status > 0 }`, `{ $.status >= 500 }`) turn the
+lines into `Requests` and `ServerErrors` metrics; Logs Insights finds all lines of one request by
+its id. An incoming `X-Request-Id` is reused only if it is short and safe, so nobody can inject
+text into the logs. Health checks are not logged (ECS calls them every 30 seconds).
+
+## 24. Which alarms, and what to check first (2026-10-22)
+
+- **5xx rate > 5 % over 5 minutes** (metric math on the two log metrics; missing data counts as
+  fine). A rate, not a count: one failure during busy use is noise, one in three requests failing
+  is not. First check: Logs Insights on the dashboard ("latest failed or slow requests"), take a
+  `requestId`, read all its lines; then the latest deployment.
+- **Task CPU > 80 % for 15 minutes** and **memory > 90 % for 15 minutes**: 0.25 vCPU / 0.5 GB is
+  tight. First check: did traffic grow (requests widget) or did one request loop (durationMs)?
+- Alarms and recoveries email through SNS. The path was tested by forcing the 5xx alarm into
+  ALARM (`set-alarm-state`); it returned to OK on the next evaluation.
+- Not alarmed yet: "no task running" needs Container Insights (extra cost); a DLQ-depth alarm comes
+  with SQS on day 6.
+
+## 25. Everyday hosting for free (2026-10-22)
+
+AWS costs about 30 USD a month if left on, which defeats a project that exists to avoid paying
+for Splitwise Pro. `deploy/free-host/` runs the same image with PostgreSQL and Caddy on any free VM
+(Oracle Cloud Always Free) or a home machine: Caddy gets a Let's Encrypt certificate so tokens only
+travel over HTTPS, the API port is not published, actuator endpoints are not served publicly, and
+registration requires a code. AWS remains the place to show the cloud skills: deploy, verify,
+destroy, and recreate from Terraform for a demo.

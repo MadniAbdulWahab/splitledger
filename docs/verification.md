@@ -250,3 +250,51 @@ fixed; its group 1 stays as harmless test data.)
 **Problems on the way, all in tooling, not in the application:** `docker login` to ECR fails with
 the Windows Credential Manager (token too long), solved with a throwaway Docker config in
 `push-image.sh`; Git Bash path conversion, solved with `cygpath` in the scripts.
+
+## 2026-10-22: day 5, deploy pipeline and observability
+
+**Test suite:** 124 tests, 0 failures (`StructuredLoggingTest` added: JSON request line with
+`requestId`, `groupId`, `method`, `path`, `status`, `durationMs`; rejected requests logged; unsafe
+`X-Request-Id` replaced).
+
+**Terraform** (`infra/app`): `Apply complete! Resources: 12 added, 0 changed, 1 destroyed.` (SNS
+topic and email subscription, 2 metric filters, 3 alarms, dashboard, GitHub OIDC provider, deploy
+role and policy; the task definition got a new revision with JSON logging). Fix after the first
+deploy attempt: `Resources: 0 added, 1 changed, 0 destroyed.` (OIDC subject with repository ids).
+
+**Deploy workflow** (Actions -> Deploy, commit `9301c89`): attempt 1 failed with
+`Not authorized to perform sts:AssumeRoleWithWebIdentity`; CloudTrail showed the token subject
+`repo:MadniAbdulWahab@105889425/splitledger@1427604325:environment:aws`, the trust policy was
+corrected. Attempt 2 failed the CI check (the run list did not yet return the finished CI run);
+the check now retries and waits. Attempt 3: **success**, 9 min 15 s including the wait for CI;
+summary `Deployed 9301c894db60 to http://18.199.142.125:8080`.
+
+**After the deployment, from AWS:**
+
+```
+service uses: task-definition/splitledger-api:4
+image: .../splitledger-api:9301c894db60, LOGGING_STRUCTURED_FORMAT_CONSOLE=ecs
+running=1, rollout=COMPLETED, deployments=1
+```
+
+`scripts/demo.sh` against the new task: all steps as on day 4 (8 new / 8 duplicates / 3 new + 4
+duplicates; replay `true` on retry; balances 0 after settle-up; chain valid, 11 entries; "Lidel"
+finds "Lidl Bonn"). Groups 1 and 2 from day 4 were still in the database after the deployment.
+
+**CloudWatch:**
+
+```
+{"@timestamp":"2026-10-22T16:31:26.906868942Z","log":{"level":"INFO","logger":"dev.splitledger.common.RequestLoggingFilter"},...,"message":"GET /groups/3/verify -> 200","requestId":"ebea58fc-d2b1-4bcc-82e6-c59004a076fa","groupId":"3","method":"GET","path":"/groups/3/verify","status":200,"durationMs":61,"ecs":{"version":"8.11"}}
+```
+
+- Filter `{ $.requestId = "1c7432d4-..." }` returns the lines of one import request
+  (`POST /groups/3/imports -> 201`, 230 ms).
+- Metric `SplitLedger/Requests`: 26 requests in the 5-minute period of the demo run.
+- Alarm path: `set-alarm-state` put `splitledger-api-5xx-rate` into ALARM at 18:32:12; history shows
+  `Successfully executed action arn:aws:sns:eu-central-1:718543338703:splitledger-alarms`; back to
+  OK at 18:33:55. The SNS email subscription is confirmed. All three alarms OK afterwards.
+
+**Free-host setup** (`deploy/free-host`, run locally with `DOMAIN=localhost`): HTTPS 200 on
+`/v3/api-docs`, HTTP redirects with 308 to HTTPS, `/actuator/health` 404 from outside, API port
+not reachable directly, registration 403 without and 201 with the code, API connected as
+`splitledger_app`. Not yet run on a real VM with a public domain (Let's Encrypt not exercised).

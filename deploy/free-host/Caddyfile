@@ -1,0 +1,9 @@
+# Caddy requests and renews the HTTPS certificate for {$DOMAIN} by itself and redirects HTTP to HTTPS.
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy api:8080
+
+	# Health and metrics stay internal; API docs and everything else are served.
+	@actuator path /actuator/*
+	respond @actuator 404
+}

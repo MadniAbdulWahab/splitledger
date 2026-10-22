@@ -1,0 +1,57 @@
+# Everyday use with friends on a free host (an Oracle Cloud "Always Free" VM, a Raspberry Pi, or
+# your own machine): API + PostgreSQL + Caddy, which gets a Let's Encrypt certificate for DOMAIN
+# automatically, so API tokens only ever travel over HTTPS.
+#
+#   cp .env.example .env    # fill in DOMAIN and the secrets
+#   docker compose up -d --build
+name: splitledger-free-host
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: splitledger
+      POSTGRES_USER: splitledger
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U splitledger -d splitledger"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ../../api
+    restart: unless-stopped
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/splitledger
+      SPRING_FLYWAY_USER: splitledger
+      SPRING_FLYWAY_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      DB_USER: splitledger_app
+      DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}
+      # Only people who know this code can create an account.
+      SPLITLEDGER_REGISTRATION_CODE: ${REGISTRATION_CODE:?set REGISTRATION_CODE in .env}
+    # No published port: only Caddy can reach the API, and only Caddy is exposed.
+    depends_on:
+      db:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    ports:
+      - "80:80"   # needed for the Let's Encrypt challenge and the redirect to HTTPS
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data   # certificates; keeping them avoids Let's Encrypt rate limits
+    depends_on:
+      - api
+
+volumes:
+  db-data:
+  caddy-data:
