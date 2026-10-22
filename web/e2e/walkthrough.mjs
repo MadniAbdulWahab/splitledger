@@ -93,15 +93,9 @@ async function walkthrough(name, options) {
   await page.getByRole('button', { name: /^Add 30,00/ }).click();
   await page.getByText('You get back 62,00 €').waitFor();
 
-  // Bars grow from the centre: Anna's (owed money) to the right, Ben's (owes) to the left.
-  const centreOf = async (selector) => {
-    const bar = await page.locator(selector).locator('xpath=..').boundingBox();
-    const fill = await page.locator(selector).boundingBox();
-    return { centre: bar.x + bar.width / 2, left: fill.x, right: fill.x + fill.width };
-  };
-  const owed = await centreOf('.bar.diverging .positive');
-  const owes = await centreOf('.bar.diverging .negative');
-  check(owed.left >= owed.centre - 1 && owes.right <= owes.centre + 1, 'credit bar right of centre, debt bar left of it');
+  // Who owes whom, from Anna's point of view.
+  const benRow = page.locator('.payment', { hasText: 'Ben owes you' });
+  check((await benRow.innerText()).includes('62,00'), 'overview says Ben owes you 62,00');
 
   // GiroCode for the suggested payment.
   await page.getByRole('button', { name: 'Show GiroCode' }).click();
@@ -110,8 +104,8 @@ async function walkthrough(name, options) {
   check(await qr.evaluate((img) => img.complete && img.naturalWidth > 100), 'GiroCode image loaded');
   await shot('4-overview');
 
-  // Ben pays; the payment shows up under the suggestions and in the history.
-  await page.getByRole('button', { name: 'Mark as paid' }).click();
+  // Ben pays (Anna shows him her GiroCode); the payment shows up in the overview and the history.
+  await page.getByRole('button', { name: 'Mark as received' }).click();
   await page.getByText('You are all settled').waitFor();
   await page.getByText('Recent payments').waitFor();
   check((await page.locator('.rows li', { hasText: 'Ben paid Anna Beispiel' }).first().innerText()).includes('62,00'),
@@ -141,6 +135,23 @@ async function walkthrough(name, options) {
   await page.getByRole('button', { name: /^Payments/ }).click();
   check((await rows.first().innerText()).includes('Ben paid Anna Beispiel'), 'History > Payments lists the payment');
   await shot('7-payments');
+
+  // A third person: Lucy pays the train for Anna and herself. Anna now owes Lucy while Ben owes
+  // Anna, and the overview says exactly that instead of net numbers.
+  await page.getByRole('tab', { name: 'Members' }).click();
+  await page.getByPlaceholder('e.g. Ben').fill('Lucy');
+  await page.getByRole('button', { name: 'Invite' }).click();
+  await page.getByText(/Send Lucy this invite code/).waitFor();
+  await page.getByRole('tab', { name: 'Add' }).click();
+  await page.getByLabel('What for?').fill('Train');
+  await page.getByLabel('Amount (€)').fill('20,00');
+  await page.getByLabel('Paid by').selectOption({ label: 'Lucy' });
+  await page.getByRole('button', { name: 'Ben shares' }).click();
+  await page.getByRole('button', { name: /^Add 20,00/ }).click();
+  await page.getByText('You owe Lucy').waitFor();
+  check((await page.locator('.payment', { hasText: 'You owe Lucy' }).innerText()).includes('10,00'), 'you owe Lucy 10,00');
+  check((await page.locator('.payment', { hasText: 'Ben owes you' }).innerText()).includes('27,06'), 'Ben owes you 27,06');
+  await shot('8-who-owes-whom');
 
   // On a phone the tabs are a bar at the bottom edge of the screen.
   if (options.viewport.width < 640) {

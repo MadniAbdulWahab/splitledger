@@ -273,3 +273,11 @@ button.wide { width: 100%; }
 .assigned.done { background: var(--positive-soft); color: var(--positive); }
 .assigned.over { background: var(--negative-soft); color: var(--negative); }
 .subhead { margin-top: 20px; color: var(--muted); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; }
+
+/* ---------- Tip: fewer transfers ---------- */
+.tip {
+  display: grid; gap: 10px; margin-top: 16px; padding: 12px 14px;
+  border-radius: var(--radius-small); background: var(--primary-soft);
+}
+.tip > button { justify-self: start; }
+.tip .payment { border-top-color: var(--line); }

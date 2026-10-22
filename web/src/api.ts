@@ -45,7 +45,10 @@ export class Api {
   setMyIban = (g: number, iban: string) =>
     this.json<Member>('PUT', `/groups/${g}/members/me/bank-details`, { iban: iban || null });
   balances = (g: number) => this.json<{ balances: Balance[] }>('GET', `/groups/${g}/balances`);
+  /** The fewest transfers that settle the whole group. */
   settlement = (g: number) => this.json<{ payments: SuggestedPayment[] }>('GET', `/groups/${g}/settlement`);
+  /** Who owes whom, pair by pair. */
+  debts = (g: number) => this.json<{ debts: SuggestedPayment[] }>('GET', `/groups/${g}/debts`);
 
   // Every create sends a fresh Idempotency-Key, so a retried click never books twice.
   addExpense = (g: number, body: unknown) =>
@@ -75,7 +78,8 @@ export class Api {
 
   /** The QR code as an object URL; an <img src> cannot send the Authorization header itself. */
   async giroCode(g: number, p: SuggestedPayment): Promise<string> {
-    const response = await this.send('GET', `/groups/${g}/settlement/girocode?from=${p.fromMemberId}&to=${p.toMemberId}`);
+    const response = await this.send('GET',
+      `/groups/${g}/settlement/girocode?from=${p.fromMemberId}&to=${p.toMemberId}&amount=${p.amountCents}`);
     return URL.createObjectURL(await response.blob());
   }
 

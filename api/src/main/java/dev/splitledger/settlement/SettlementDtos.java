@@ -22,6 +22,10 @@ public final class SettlementDtos {
     public record SettlementResponse(long groupId, List<SuggestedPayment> payments) {
     }
 
+    /** Open debts per pair of members, largest first. */
+    public record DebtsResponse(long groupId, List<SuggestedPayment> debts) {
+    }
+
     public record RecordPaymentRequest(
             @NotNull Long fromMemberId,
             @NotNull Long toMemberId,

@@ -1,10 +1,13 @@
 package dev.splitledger.settlement;
 
 import dev.splitledger.common.IdempotentCreator;
+import dev.splitledger.settlement.SettlementDtos.DebtsResponse;
 import dev.splitledger.settlement.SettlementDtos.PaymentResponse;
 import dev.splitledger.settlement.SettlementDtos.RecordPaymentRequest;
 import dev.splitledger.settlement.SettlementDtos.SettlementResponse;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Positive;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -29,7 +32,13 @@ class SettlementController {
         this.settlementService = settlementService;
     }
 
-    /** Who should pay whom so that every balance becomes zero. */
+    /** Who owes whom, pair by pair ("Madni owes Lucy 10,00 €"). */
+    @GetMapping("/groups/{groupId}/debts")
+    DebtsResponse debts(@PathVariable long groupId) {
+        return settlementService.debts(groupId);
+    }
+
+    /** The fewest transfers that bring every balance to zero. */
     @GetMapping("/groups/{groupId}/settlement")
     SettlementResponse suggest(@PathVariable long groupId) {
         return settlementService.suggest(groupId);
@@ -37,14 +46,15 @@ class SettlementController {
 
     /**
      * PNG to scan with a German banking app: receiver, IBAN, amount and transfer text filled in.
-     * {@code from}/{@code to} pick one of the suggested payments.
+     * {@code amount} in cents; without it, the open debt from {@code from} to {@code to} is used.
      */
     @GetMapping(path = "/groups/{groupId}/settlement/girocode", produces = MediaType.IMAGE_PNG_VALUE)
-    ResponseEntity<byte[]> giroCode(@PathVariable long groupId, @RequestParam long from, @RequestParam long to) {
+    ResponseEntity<byte[]> giroCode(@PathVariable long groupId, @RequestParam long from, @RequestParam long to,
+                                    @RequestParam(required = false) @Positive @Max(100_000_000L) Long amount) {
         return ResponseEntity.ok()
                 .contentType(MediaType.IMAGE_PNG)
                 .cacheControl(CacheControl.noStore()) // contains an IBAN and the current amount
-                .body(settlementService.giroCode(groupId, from, to));
+                .body(settlementService.giroCode(groupId, from, to, amount));
     }
 
     @PostMapping("/groups/{groupId}/payments")

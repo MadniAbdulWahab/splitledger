@@ -220,6 +220,7 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
   const [tab, setTab] = useState<Tab>('overview');
   const [members, setMembers] = useState<Member[]>([]);
   const [balances, setBalances] = useState<Balance[]>([]);
+  const [debts, setDebts] = useState<SuggestedPayment[]>([]);
   const [payments, setPayments] = useState<SuggestedPayment[]>([]);
   const [candidates, setCandidates] = useState<BankTransaction[]>([]);
   const [paid, setPaid] = useState<PaymentRecord[]>([]);
@@ -227,11 +228,13 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const reload = useCallback(async () => {
-    const [m, b, s, c, p] = await Promise.all([
-      api.members(groupId), api.balances(groupId), api.settlement(groupId), api.candidates(groupId), api.payments(groupId),
+    const [m, b, d, s, c, p] = await Promise.all([
+      api.members(groupId), api.balances(groupId), api.debts(groupId), api.settlement(groupId),
+      api.candidates(groupId), api.payments(groupId),
     ]);
     setMembers(m);
     setBalances(b.balances);
+    setDebts(d.debts);
     setPayments(s.payments);
     setCandidates(c);
     setPaid(p);
@@ -285,30 +288,11 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
       {notice && <Alert kind="success" text={notice.text} sticky={notice.sticky} onClose={() => setNotice(null)} />}
 
       {tab === 'overview' && (
-        <div className="columns">
-          <div className="card">
-            <h2>Balances</h2>
-            <BalanceList balances={balances} myMemberId={myMemberId} />
-          </div>
-          <div className="card">
-            <h2>Settle up</h2>
-            {payments.length === 0
-              ? <Empty title="Nothing to settle" text="Everyone has paid their share." />
-              : payments.map((p) => (
-                <PaymentCard key={`${p.fromMemberId}-${p.toMemberId}`} api={api} groupId={groupId} payment={p}
-                  onPaid={() => run(() => api.recordPayment(groupId, p), `Recorded: ${p.fromName} paid ${p.toName} ${formatCents(p.amountCents)}`)} />
-              ))}
-            {paid.length > 0 && (
-              <>
-                <h3 className="subhead">Recent payments</h3>
-                <PaymentList payments={paid.slice(0, 3)} names={new Map(members.map((m) => [m.id, m.displayName]))} />
-                {paid.length > 3 && (
-                  <button className="ghost wide spaced-small" onClick={() => setTab('history')}>All {paid.length} payments</button>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+        <Overview api={api} groupId={groupId} myMemberId={myMemberId} members={members} debts={debts}
+          simplified={payments} paid={paid} onShowAllPayments={() => setTab('history')}
+          record={(t) => run(() => api.recordPayment(groupId, t),
+            t.toMemberId === myMemberId ? `Recorded: ${t.fromName} paid you ${formatCents(t.amountCents)}`
+              : `Recorded: ${t.fromName} paid ${t.toName} ${formatCents(t.amountCents)}`)} />
       )}
 
       {tab === 'add' && (
@@ -396,84 +380,137 @@ function Group({ api, groupId, groupName, myMemberId }: { api: Api; groupId: num
   );
 }
 
-/**
- * Bars grow from a centre line: to the right (green) for what the group owes someone, to the left
- * (red) for what someone owes. Length is relative to the largest balance in the group.
- */
-function BalanceList({ balances, myMemberId }: { balances: Balance[]; myMemberId: number }) {
-  const largest = Math.max(1, ...balances.map((b) => Math.abs(b.balanceCents)));
-  return (
-    <ul className="rows">
-      {balances.map((b) => {
-        const cents = b.balanceCents;
-        const width = `${(Math.abs(cents) / largest) * 50}%`;
-        return (
-          <li key={b.memberId}>
-            <span className="avatar">{initials(b.displayName)}</span>
-            <div className="grow">
-              <div className="balance-head">
-                <strong>{b.displayName}{b.memberId === myMemberId ? ' (you)' : ''}</strong>
-                <span className={`amount ${cents < 0 ? 'negative' : cents > 0 ? 'positive' : 'muted'}`}>
-                  {cents > 0 ? `gets back ${formatCents(cents)}` : cents < 0 ? `owes ${formatCents(-cents)}` : 'settled'}
-                </span>
-              </div>
-              <div className="bar diverging" aria-hidden="true">
-                {cents !== 0 && <span className={cents < 0 ? 'negative' : 'positive'} style={{ width }} />}
-              </div>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
-function PaymentCard({ api, groupId, payment, onPaid }:
-  { api: Api; groupId: number; payment: SuggestedPayment; onPaid: () => void }) {
-  const [qr, setQr] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => () => { if (qr) URL.revokeObjectURL(qr); }, [qr]);
-
-  return (
-    <div className="payment">
-      <div className="payment-line">
-        <span className="avatar">{initials(payment.fromName)}</span>
-        <span className="arrow" aria-hidden="true">→</span>
-        <span className="avatar">{initials(payment.toName)}</span>
-        <div className="grow">
-          <strong>{payment.fromName} pays {payment.toName}</strong>
-          <span className="muted small">{payment.toIban ? formatIban(payment.toIban) : `${payment.toName} has not added an IBAN yet`}</span>
-        </div>
-        <span className="amount">{formatCents(payment.amountCents)}</span>
-      </div>
-      <div className="actions">
-        {payment.toIban && (
-          <button className="ghost" onClick={() => (qr ? setQr(null)
-            : api.giroCode(groupId, payment).then(setQr, (e) => setError(e.message)))}>
-            {qr ? 'Hide GiroCode' : 'Show GiroCode'}
-          </button>
-        )}
-        <button className="primary" onClick={onPaid}>Mark as paid</button>
-      </div>
-      {qr && (
-        <div className="qr-box">
-          <img src={qr} alt={`GiroCode: ${formatCents(payment.amountCents)} to ${payment.toName}`} />
-          <p className="muted small">Scan with your banking app (e.g. Sparkasse "Scan2Bank"), check name, IBAN and amount,
-            send the transfer, then mark it as paid.</p>
-        </div>
-      )}
-      {error && <Alert kind="error" text={error} onClose={() => setError(null)} />}
-    </div>
-  );
-}
-
 type SplitMode = 'EQUAL' | 'EXACT' | 'SHARES';
 const SPLIT_MODES: { id: SplitMode; label: string; hint: string }[] = [
   { id: 'EQUAL', label: 'Equally', hint: 'Everyone selected pays the same.' },
   { id: 'EXACT', label: 'Exact amounts', hint: 'Enter what each person owes; it has to add up to the total.' },
   { id: 'SHARES', label: 'Shares', hint: 'E.g. 2 for someone who had two portions, 0 for someone who had none.' },
 ];
+
+/**
+ * Who owes whom. First everything between the signed-in member and the others ("You owe Lucy",
+ * "Tim owes you"), then what is open between the others. The simplified plan (fewest transfers
+ * for the whole group) is offered as a tip only when it actually saves transfers.
+ */
+function Overview({ api, groupId, myMemberId, members, debts, simplified, paid, record, onShowAllPayments }: {
+  api: Api; groupId: number; myMemberId: number; members: Member[];
+  debts: SuggestedPayment[]; simplified: SuggestedPayment[]; paid: PaymentRecord[];
+  record: (transfer: SuggestedPayment) => Promise<boolean>; onShowAllPayments: () => void;
+}) {
+  const [showSimplified, setShowSimplified] = useState(false);
+  const mine = debts.filter((d) => d.fromMemberId === myMemberId || d.toMemberId === myMemberId);
+  const others = debts.filter((d) => d.fromMemberId !== myMemberId && d.toMemberId !== myMemberId);
+  const me = members.find((m) => m.id === myMemberId);
+  const names = new Map(members.map((m) => [m.id, m.displayName]));
+
+  return (
+    <div className="columns">
+      <div className="card">
+        <h2>Between you and the others</h2>
+        {mine.length === 0
+          ? <Empty title="You are settled with everyone" text="Nobody owes you anything and you owe nobody." />
+          : mine.map((d) => (
+            <DebtRow key={`${d.fromMemberId}-${d.toMemberId}`} api={api} groupId={groupId} debt={d}
+              myMemberId={myMemberId} myIban={me?.iban ?? null} onSettled={() => record(d)} />
+          ))}
+      </div>
+
+      <div className="card">
+        <h2>Between the others</h2>
+        {others.length === 0
+          ? <Empty title="Nothing open" text="The others are settled among themselves." />
+          : (
+            <ul className="rows">
+              {others.map((d) => (
+                <li key={`${d.fromMemberId}-${d.toMemberId}`}>
+                  <span className="avatar">{initials(d.fromName)}</span>
+                  <span className="arrow" aria-hidden="true">→</span>
+                  <span className="avatar">{initials(d.toName)}</span>
+                  <div className="grow"><strong>{d.fromName} owes {d.toName}</strong></div>
+                  <span className="amount">{formatCents(d.amountCents)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+        {simplified.length > 0 && simplified.length < debts.length && (
+          <div className="tip">
+            <p>
+              <strong>Tip:</strong> the group can settle everything with {simplified.length} {simplified.length === 1 ? 'transfer' : 'transfers'} instead
+              of {debts.length}. The amounts change, the end result is the same.
+            </p>
+            <button className="ghost" onClick={() => setShowSimplified((v) => !v)}>{showSimplified ? 'Hide' : 'Show'} fewer transfers</button>
+            {showSimplified && simplified.map((t) => (
+              <DebtRow key={`s-${t.fromMemberId}-${t.toMemberId}`} api={api} groupId={groupId} debt={t}
+                myMemberId={myMemberId} myIban={me?.iban ?? null} onSettled={() => record(t)} />
+            ))}
+          </div>
+        )}
+
+        {paid.length > 0 && (
+          <>
+            <h3 className="subhead">Recent payments</h3>
+            <PaymentList payments={paid.slice(0, 3)} names={names} />
+            {paid.length > 3 && (
+              <button className="ghost wide spaced-small" onClick={onShowAllPayments}>All {paid.length} payments</button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** One open amount between two people, phrased from the signed-in member's point of view. */
+function DebtRow({ api, groupId, debt, myMemberId, myIban, onSettled }: {
+  api: Api; groupId: number; debt: SuggestedPayment; myMemberId: number; myIban: string | null;
+  onSettled: () => Promise<boolean>;
+}) {
+  const [qr, setQr] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => () => { if (qr) URL.revokeObjectURL(qr); }, [qr]);
+
+  const iOwe = debt.fromMemberId === myMemberId;
+  const theyOweMe = debt.toMemberId === myMemberId;
+  const title = iOwe ? `You owe ${debt.toName}` : theyOweMe ? `${debt.fromName} owes you` : `${debt.fromName} pays ${debt.toName}`;
+  const receiverIban = theyOweMe ? myIban : debt.toIban;
+  const qrHint = iOwe
+    ? 'Scan with your banking app, check name, IBAN and amount, send, then mark it as paid.'
+    : theyOweMe
+      ? `Let ${debt.fromName} scan this with their banking app; mark it as received when the money is there.`
+      : `${debt.fromName} scans this with their banking app.`;
+
+  return (
+    <div className="payment">
+      <div className="payment-line">
+        <span className="avatar">{initials(iOwe ? debt.toName : debt.fromName)}</span>
+        <div className="grow">
+          <strong>{title}</strong>
+          <span className="muted small">
+            {receiverIban ? `to ${formatIban(receiverIban)}` : `${debt.toName} has not added an IBAN yet`}
+          </span>
+        </div>
+        <span className={`amount ${iOwe ? 'negative' : theyOweMe ? 'positive' : ''}`}>{formatCents(debt.amountCents)}</span>
+      </div>
+      <div className="actions">
+        {receiverIban && (
+          <button className="ghost" onClick={() => (qr ? setQr(null)
+            : api.giroCode(groupId, debt).then(setQr, (e) => setError(e.message)))}>
+            {qr ? 'Hide GiroCode' : 'Show GiroCode'}
+          </button>
+        )}
+        <button className="primary" onClick={() => void onSettled()}>{theyOweMe ? 'Mark as received' : 'Mark as paid'}</button>
+      </div>
+      {qr && (
+        <div className="qr-box">
+          <img src={qr} alt={`GiroCode: ${formatCents(debt.amountCents)} to ${debt.toName}`} />
+          <p className="muted small">{qrHint}</p>
+        </div>
+      )}
+      {error && <Alert kind="error" text={error} onClose={() => setError(null)} />}
+    </div>
+  );
+}
 
 function ExpenseForm({ members, myMemberId, onSubmit, onDone }: {
   members: Member[]; myMemberId: number; onSubmit: (body: unknown) => Promise<boolean>; onDone: () => void;
