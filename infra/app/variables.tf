@@ -60,9 +60,9 @@ variable "db_instance_class" {
 }
 
 variable "github_repository" {
-  description = "GitHub repository (owner/name) whose deploy workflow may assume the deploy role"
+  description = "GitHub repository whose deploy workflow may assume the deploy role, as it appears in GitHub's OIDC token: owner@ownerId/name@repositoryId"
   type        = string
-  default     = "MadniAbdulWahab/splitledger"
+  default     = "MadniAbdulWahab@105889425/splitledger@1427604325"
 }
 
 variable "log_retention_days" {

@@ -24,6 +24,8 @@ data "aws_iam_policy_document" "github_assume" {
 
     # Only jobs of this repository that run in its GitHub environment "aws". Forks, other
     # repositories and other workflows of this repository without the environment get nothing.
+    # GitHub puts the numeric owner and repository ids into the claim, so a repository created
+    # later under the same name (after a deletion or rename) does not match.
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
