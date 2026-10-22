@@ -10,9 +10,11 @@ SplitLedger is a small ledger service for one group of friends that fixes exactl
 1. **Import instead of typing.** Upload your bank statement export; outgoing payments become
    expense candidates only you can see, and importing the same or an overlapping file never
    creates duplicates (two identical coffees on one day stay two).
-2. **History nobody can quietly rewrite.** Append-only, double-entry ledger. Corrections are
-   reversing entries, PostgreSQL rejects UPDATE and DELETE, and a SHA-256 hash chain shows if
-   someone with database access changed anything.
+2. **History nobody can quietly rewrite.** Anyone in the group can edit or delete an expense or
+   undo a payment, but nothing is overwritten: underneath it is an append-only, double-entry
+   ledger where a change is a reversing entry plus the new version, the old one stays visible with
+   who changed it, PostgreSQL rejects UPDATE and DELETE, and a SHA-256 hash chain shows if someone
+   with database access changed anything.
 3. **Search the whole history, free.** German word forms ("Einkauf" finds "Einkäufe"), typos
    ("Pizerria") and filters, on PostgreSQL full-text and trigram indexes.
 4. **Settle with a scan.** "You owe Lucy 10,00 €" comes with a GiroCode (EPC QR) that German
@@ -57,7 +59,7 @@ dated evidence of what ran is in [docs/verification.md](docs/verification.md).
 | Worker | Kotlin 2.4, kotlinx.serialization, AWS Lambda (java21, arm64), AWS SDK v2 |
 | Data | PostgreSQL 16: `tsvector` + GIN, `pg_trgm`, triggers, row locks, partial unique indexes |
 | Web page | React 19, TypeScript, Vite; served by Spring Boot from the same origin, strict Content-Security-Policy |
-| Tests | JUnit, Testcontainers (PostgreSQL, ElasticMQ for SQS, S3Mock), concurrency tests, Vitest, a Playwright browser walkthrough in CI; 146 API + 12 worker + 27 web tests |
+| Tests | JUnit, Testcontainers (PostgreSQL, ElasticMQ for SQS, S3Mock), concurrency tests, Vitest, a Playwright browser walkthrough in CI; 157 API + 13 worker + 27 web tests |
 | Infrastructure | Terraform 1.16, AWS provider 6: VPC, RDS, ECR, ECS Fargate, SQS, Lambda, S3, SSM, IAM, CloudWatch, SNS, Budgets |
 | Delivery | GitHub Actions (CI on every push, deploy via OIDC), Docker multi-stage image, non-root |
 
@@ -158,16 +160,18 @@ Everything under `/groups/{id}` is only for members of that group (403 otherwise
 | `PUT /groups/{id}/members/me/bank-details` | Set your IBAN/BIC (validated with ISO 13616 mod-97) |
 | `POST /groups/{id}/expenses` | Create an expense; requires an `Idempotency-Key` header |
 | `GET /groups/{id}/expenses/{expenseId}` | Read an expense with its shares |
-| `POST /groups/{id}/expenses/{expenseId}/reversal` | Cancel an expense with reversing entries (once) |
+| `POST /groups/{id}/expenses/{expenseId}/reversal` | Delete: reversing entries cancel the expense (once); the history shows who |
+| `POST /groups/{id}/expenses/{expenseId}/correction` | Edit: reverses the old version and creates the new one in one step (`Idempotency-Key`) |
 | `GET /groups/{id}/expenses/search?q=&member=&from=&to=&min=&max=&limit=&cursor=` | Search descriptions, notes and bank purpose texts; filters; keyset pagination |
 | `POST /groups/{id}/imports` | Upload your bank statement (multipart `file`); returns new / duplicate / skipped counts |
 | `GET /groups/{id}/bank-transactions` | Your expense candidates (only you see your bank data) |
-| `POST /groups/{id}/bank-transactions/{tid}/confirmation`, `.../ignore` | Turn a candidate into a shared expense, or drop it |
+| `POST /groups/{id}/bank-transactions/{tid}/confirmation`, `.../ignore` | Share a candidate (payer, amount, date default to the bank's values), or drop it |
 | `GET /groups/{id}/balances` | Net balance per member; positive means the group owes them |
 | `GET /groups/{id}/debts` | Who owes whom, pair by pair (adds up to the balances) |
 | `GET /groups/{id}/settlement` | The fewest transfers that settle everyone (greedy), with the receiver's IBAN |
 | `GET /groups/{id}/settlement/girocode?from=&to=&amount=` | GiroCode PNG (EPC069-12) for a transfer between two members |
 | `POST /groups/{id}/payments`, `GET /groups/{id}/payments` | Record a settle-up payment (`Idempotency-Key`) and list them |
+| `POST /groups/{id}/payments/{paymentId}/reversal` | Undo a payment recorded by mistake (once); it stays listed as undone |
 | `GET /groups/{id}/verify` | Recompute the hash chain; report the first broken entry and the head hash |
 
 Amounts are integer cents. Split modes: `EQUAL`, `EXACT` (cents per person) and `SHARES` (units per
@@ -176,14 +180,14 @@ appears in the logs.
 
 ## Bank data: assumptions and privacy
 
-- **The CSV importer is built against a made-up file.** My bank (Sparkasse KölnBonn) currently only
-  gives me PDF statements, so the importer targets the standard Sparkasse online-banking
-  "CSV-CAMT" export layout (semicolon-separated, Windows-1252, decimal commas, `dd.mm.yy` dates,
-  columns such as `Buchungstag`, `Verwendungszweck`, `Beguenstigter/Zahlungspflichtiger`,
-  `Kontonummer/IBAN`, `Betrag`). The sample files in `samples/` are synthetic: invented names and
-  IBANs with a bank code no German bank has. If a real export becomes available, its header is
-  compared locally and the parser adjusted; real statements are never committed. The parser sits
-  behind an interface so other banks (and ISO 20022 CAMT.053) can be added.
+- **The importer reads the Sparkasse "CSV-CAMT" export** from online banking (semicolon-separated,
+  Windows-1252, decimal commas, `dd.mm.yy` dates, columns such as `Buchungstag`,
+  `Verwendungszweck`, `Beguenstigter/Zahlungspflichtiger`, `Kontonummer/IBAN`, `Betrag`). It was
+  first built against the published layout and then checked with a real export of my Sparkasse
+  KölnBonn account (CSV-CAMT, 2026-10-23), which imported without changes. The files in
+  `samples/` and the tests stay synthetic: invented names and IBANs with a bank code no German bank
+  has. Real statements are never committed. The parser sits behind an interface so other banks
+  (and ISO 20022 CAMT.053) can be added.
 - Names and IBANs are personal data. The uploaded file is parsed in memory and never stored; incoming
   and pending payments are not stored at all. Outgoing payments wait as candidates that only the
   account owner can see. Confirming one makes it a shared expense; ignoring one deletes its
@@ -201,6 +205,7 @@ appears in the logs.
 | GitHub OIDC deploy pipeline, JSON logs, CloudWatch alarms and dashboard, free-host setup | done (day 5) |
 | Transactional outbox, SQS FIFO with DLQ, Kotlin Lambda writing monthly statements to S3 | done (day 6) |
 | GiroCode, web page with splits, history, who owes whom; browser test in CI | done (day 7) |
+| Edit, delete and undo with an audit trail; sharing a bank payment through the form; real Sparkasse export checked | done (2026-10-23) |
 | CAMT.053 import; Lambda deployment through the pipeline; remote Terraform state | later |
 
 The AWS stack was destroyed after the evidence was recorded; `infra/app` recreates it in about

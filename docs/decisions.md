@@ -454,3 +454,34 @@ IBAN, payer-only refusal, equal and exact splits, GiroCode, payment, bank import
 search and pagination, who owes whom, and that no JavaScript error occurs. CI starts the real
 stack with `docker compose up --wait` (PostgreSQL, API with the built page, least-privilege role)
 and runs it; on failure the screenshots and API logs are kept. The same script ran against AWS.
+
+## 34. Edit, delete and undo without overwriting anything (2026-10-23)
+
+Users expect to fix mistakes, and the first version only had a reversal endpoint without a button.
+The ledger stays append-only; what users see as editing is built from what it already allows:
+
+- **Delete** writes reversing entries for the expense. The expense and its original entries stay;
+  the history shows it crossed out.
+- **Edit** (`POST .../expenses/{id}/correction`) reverses the old version and creates the new one
+  in one transaction, so the group never sees both or neither. It takes an `Idempotency-Key` like
+  creating; the original expense id is part of the request hash, so a key cannot be reused to edit
+  another expense. A double click that arrives at the same moment waits for the group lock, finds
+  the expense already reversed and gets the first request's result instead of a 409.
+- **Undo payment** reverses a payment recorded by mistake; "who owes whom" ignores undone
+  payments, and the statement worker gets a new `PAYMENT_REVERSED` event that subtracts it from the
+  month (the outbox table's check constraint had to allow the new type).
+
+Who did it is recorded in a new append-only table `correction` (kind, the expense or payment, the
+new version for an edit, member, time), written in the same transaction as the reversal. Unique
+constraints make every expense and payment correctable at most once; an edited expense's new
+version can be edited again. Any member of the group may correct anything, as in Splitwise, because
+the history always shows who did it. Deleting an expense that came from a bank transaction does not
+put the transaction back into the bank list; it can be entered by hand if needed.
+
+## 35. Sharing a bank payment opens the expense form (2026-10-23)
+
+"Share" used to split the payment equally with everyone at once. Real payments are often only
+partly shared, paid on behalf of someone, or belong to another day, so Share now opens the Add tab
+filled with the bank's name, amount and date. The confirmation endpoint accepts payer, amount and
+date and falls back to the bank's values when they are missing, so older clients keep working. The
+bank purpose text is still attached to the expense and stays searchable.

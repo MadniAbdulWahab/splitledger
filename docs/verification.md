@@ -414,3 +414,26 @@ gateways, Elastic IPs, SplitLedger log groups, SSM parameters or alarms. Only th
 The application stack ran from 15:28 to 21:22 UTC (about six hours, roughly 0.30 USD of Free-plan
 credits). It can be recreated from Terraform in about ten minutes; the GitHub Deploy workflow fails
 until it is.
+
+## 2026-10-23: real bank export, edit, delete and undo
+
+**Stack recreated** from Terraform for testing by hand: `Apply complete! Resources: 58 added, 0
+changed, 0 destroyed.`, image `48e37db505cd` pushed, then one ECS task started (`Resources: 0
+added, 1 changed, 0 destroyed.`). The page and `/v3/api-docs` answered with 200.
+
+**Real Sparkasse export:** Abdul exported his Sparkasse KölnBonn transactions as CSV-CAMT from
+online banking and uploaded them on the AWS deployment. The importer read the file without any
+change to the parser; the bank tab listed 126 open outgoing payments with names, dates, amounts and
+purpose texts (screenshot from Abdul, who confirmed it read the file correctly). The file is not in the
+repository; no names or amounts from it are recorded here.
+
+**Tests:** API 157 tests, 0 failures (`ExpenseCorrectionApiTest`: any member deletes and the
+history shows who and when, edit replaces in one step with the old version kept, edit replay and
+409s, payer-only rule on edit, strangers get 403; payment undo brings the debt back, once only, not
+from another group; outbox `PAYMENT_REVERSED` with opposite postings; sharing a bank payment with
+a different payer, amount and date; app role cannot update or delete `correction`). Statement worker
+13 tests (undoing a payment takes it back out of the month). Web 27 unit tests and typecheck.
+
+**Browser walkthrough** against `docker compose up --build` (new steps: Share opens the form filled
+from the bank, undo a payment, delete an expense, edit an expense; the overview ends at "Ben owes
+you 87,00"): `Walkthrough passed: desktop and phone`.
