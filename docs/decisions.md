@@ -216,3 +216,76 @@ wins for a group of friends.
 
 Recording a payment writes ledger entries like an expense (payer +amount, receiver -amount) and
 uses the same idempotency mechanism, now shared in `IdempotentCreator`.
+
+## 16. AWS account access without IAM Identity Center (2026-10-21)
+
+The account is on the AWS **Free plan**: usage is paid from credits and the card is never
+charged; the account is suspended, not billed, when the credits or six months run out. Enabling
+AWS Organizations or IAM Identity Center would switch it to the paid plan and drop the credits, so
+the usual best practice (Identity Center with `aws configure sso`) is not used. Instead: root user
+with MFA and no access keys, an IAM user `madni-admin` with MFA for daily work, and `aws login`,
+which gives the CLI short-lived credentials from a browser sign-in. No long-lived access keys
+exist anywhere. CI on day 5 gets its own role via GitHub OIDC.
+
+## 17. Cost guard separate from the application stack (2026-10-21)
+
+`infra/bootstrap` holds only the AWS Budget (5 USD/month, email at 50 % and 100 % actual and 100 %
+forecast). It is a separate Terraform root, so `terraform destroy` in `infra/app` can never remove
+it. It measures cost **before credits** (`include_credit = false`): on the Free plan the credits
+make the net cost 0, and an alert on that would never fire.
+
+## 18. Network without NAT gateway (2026-10-22)
+
+A NAT gateway costs about 35 USD/month before traffic, more than everything else together. The API
+task runs in a public subnet with a public IP; its security group allows inbound 8080 only and
+outbound only 443 (ECR, CloudWatch Logs, SSM) and 5432 to the database security group. The
+database runs in private subnets whose route table has no route to the internet, and its security
+group accepts 5432 only from the API's security group. The VPC's default security group is
+stripped of all rules. Verified on AWS: the database name resolves to `10.20.10.89` and port 5432
+is not reachable from outside.
+
+Trade-off: the task's public IP changes with every deployment (`scripts/aws-api-url.sh` looks it
+up). An Application Load Balancer would give a stable name and HTTPS, at about 20 USD/month; it can
+be added for a demo. VPC interface endpoints instead of the public route would cost about 7 USD/month
+each.
+
+## 19. Secrets never in the Terraform state (2026-10-22)
+
+The RDS master password, the application role's password and the registration code are generated
+by `ephemeral "random_password"` resources and passed to write-only attributes (`password_wo` on
+RDS, `value_wo` on SSM parameters). Terraform uses them during the run and stores nothing; the
+state shows `password: null` and empty parameter values (checked after apply). ECS injects them
+from SSM at task start (`secrets` in the task definition), so they appear neither in the task
+definition nor in the image. `secrets_version` is the one switch to replace all of them.
+
+SSM Parameter Store instead of RDS's managed Secrets Manager password (HashiCorp's first choice):
+the spec asks for SSM, standard parameters are free, and Secrets Manager rotates the RDS password
+every 7 days while running tasks keep the old one.
+
+## 20. Least-privilege IAM and database roles (2026-10-22)
+
+- **ECS execution role:** instead of the managed `AmazonECSTaskExecutionRolePolicy` (any
+  repository, any log group), a policy for exactly this ECR repository, this log group and these
+  three SSM parameters. The trust policy is limited to ECS in this account (`aws:SourceAccount`).
+- **Task role:** exists but has no permissions; the application needs no AWS API yet (day 6 adds
+  SQS and S3).
+- **Database:** Flyway migrates as the RDS master user; the application connects as
+  `splitledger_app` (migration V7): SELECT/INSERT everywhere, UPDATE only on mutable tables (member,
+  bank import, bank transaction, and `expense_group.name`, which `SELECT ... FOR NO KEY UPDATE`
+  requires), no DELETE, no access to `flyway_schema_history`, and as a non-owner it cannot disable
+  the append-only triggers. The role's password is set after every migration by a Flyway callback
+  that lets PostgreSQL quote it (`format('%L')`), so no secret is ever written into a migration.
+  Docker Compose uses the same split, and the demo passes under it locally and on AWS.
+
+## 21. Fargate rather than Lambda for the API (2026-10-22)
+
+The API is a Spring Boot application with a connection pool, Flyway migrations at startup and a
+start time of about a minute on 0.25 vCPU. On Lambda every cold start would pay that minute (or need
+SnapStart and a connection proxy), and the many short-lived connections would strain a micro RDS.
+A single small Fargate task keeps the application unchanged (the same image as locally) and costs
+about 0.02 USD per hour. Lambda fits the monthly statement worker on day 6: event-driven, short,
+no permanent connection.
+
+Deployments stop the old task before starting the new one (`minimum_healthy_percent = 0`): a
+short gap is acceptable for a demo, and two versions never migrate at the same moment. The
+deployment circuit breaker rolls back a version that fails its health checks.

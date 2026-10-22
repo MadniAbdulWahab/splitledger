@@ -7,8 +7,12 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-CLUSTER="$(terraform -chdir="$ROOT/infra/app" output -raw ecs_cluster_name)"
-SERVICE="$(terraform -chdir="$ROOT/infra/app" output -raw ecs_service_name)"
+
+# Native path for Windows programs (terraform.exe, docker.exe) when running in Git Bash.
+native_path() { if command -v cygpath > /dev/null; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+INFRA="$(native_path "$ROOT/infra/app")"
+CLUSTER="$(terraform -chdir="$INFRA" output -raw ecs_cluster_name)"
+SERVICE="$(terraform -chdir="$INFRA" output -raw ecs_service_name)"
 
 TASK="$(aws ecs list-tasks --cluster "$CLUSTER" --service-name "$SERVICE" --desired-status RUNNING \
   --query 'taskArns[0]' --output text)"

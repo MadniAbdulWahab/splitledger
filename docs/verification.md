@@ -168,3 +168,85 @@ Run: https://github.com/MadniAbdulWahab/splitledger/actions/runs/39514641087
   0 destroyed.` `aws budgets describe-budgets` shows `splitledger-monthly`, limit 5.0 USD,
   `IncludeCredit: False` (usage is measured before credits, so the alert also works on the Free plan).
   Email alerts at 50 % and 100 % actual and 100 % forecast.
+
+## 2026-10-22: day 4, the API runs on AWS (ECS Fargate + RDS), provisioned only by Terraform
+
+**Least-privilege database role** (before deploying): `AppRolePrivilegesTest` (14 tests) checks
+that `splitledger_app` can do what the application needs and gets `permission denied` / `must be
+owner` for UPDATE/DELETE on history tables, DELETE on members, reading `flyway_schema_history`,
+disabling a trigger and dropping a table; the role logs in with a password containing quotes and
+`; drop table member; --`. Full suite: 122 tests, 0 failures. `scripts/demo.sh` passes against
+Docker Compose with the application connected as `splitledger_app` (seen in `pg_stat_activity`).
+
+**Apply** (`infra/app`, region eu-central-1):
+
+```
+Plan: 33 to add, 0 to change, 0 to destroy.
+aws_db_instance.main: Creation complete after 7m38s [id=db-VIWGCNPD247Y3Q2RNVK3HLQ76Q]
+Apply complete! Resources: 33 added, 0 changed, 0 destroyed.
+```
+
+**Secrets not in the state:** after apply, `terraform.tfstate` contains `"password": null`,
+`"password_wo": null` for RDS and an empty `"value"` / `"value_wo": null` for all three SSM
+parameters; the plan showed `password_wo = (write-only attribute)`.
+
+**Image:** built and pushed with `scripts/push-image.sh`, tag `b11a219302ee` (git commit), digest
+`sha256:0891e35ba11eae2041898006fd21d9945b3483949bdd968a8e1a58481e0c143a`. Second apply with
+`api_desired_count=1`: `Apply complete! Resources: 1 added, 1 changed, 1 destroyed.` (new task
+definition revision replaces the old one).
+
+**CloudWatch Logs** (`/ecs/splitledger-api`), first task:
+
+```
+Successfully applied 7 migrations to schema "public", now at version v7 (execution time 00:00.678s)
+Login password of database role splitledger_app set
+Started SplitledgerApiApplication in 58.2 seconds (process running for 60.401)
+```
+
+**Network checks:**
+
+```
+aws rds describe-db-instances: public=false, encrypted=true, class=db.t4g.micro, engine=16.13
+nslookup <rds endpoint>: Address 10.20.10.89 (private)
+TCP connect to <rds endpoint>:5432 from the internet: not reachable
+aws ec2 describe-nat-gateways (available/pending): 0
+```
+
+**Demo against AWS** (`BASE_URL=$(scripts/aws-api-url.sh)`, registration code from SSM). Without
+the code, `POST /users` returned `403`. With it:
+
+```
+== Anna imports her March statement, the same file again, then an overlapping one
+sparkasse-csv-camt-2026-03-a.csv     new=8 duplicates=0 skipped=1
+sparkasse-csv-camt-2026-03-a.csv     new=0 duplicates=8 skipped=1
+sparkasse-csv-camt-2026-03-b.csv     new=3 duplicates=4 skipped=2
+
+== Anna confirms two shared payments and ignores the rent
+expense 4: EDEKA Center Bonn, 5412 cents
+expense 5: Lidl Bonn, 2345 cents
+rent ignored; Ben sees 0 of Anna's bank transactions
+
+== Ben adds a pizza night; his client retries the request after a timeout
+attempt 1: Idempotent-Replayed=false
+attempt 2: Idempotent-Replayed=true
+
+== Balances and suggested settle-up
+{"groupId":2,"balances":[{"memberId":3,"displayName":"Anna","balanceCents":2078},{"memberId":4,"displayName":"Ben","balanceCents":-2078}]}
+{"groupId":2,"payments":[{"fromMemberId":4,"fromName":"Ben","toMemberId":3,"toName":"Anna","toIban":"DE81000010000001234567","toBic":null,"amountCents":2078}]}
+
+== Ben pays Anna by bank transfer and records it
+{"groupId":2,"balances":[{"memberId":3,"displayName":"Anna","balanceCents":0},{"memberId":4,"displayName":"Ben","balanceCents":0}]}
+
+== Hash chain
+{"groupId":2,"valid":true,"entriesChecked":11,"headHash":"f23b981805f1b4e2a35be232f1763775312aa969cf286efaf68fdbe38ddf0286","balanced":true,"firstBrokenEntry":null}
+
+== Search with a typo
+"description":"Lidl Bonn"
+```
+
+(Group 2: a first run had stopped at the retry step because of a Windows path issue in the script,
+fixed; its group 1 stays as harmless test data.)
+
+**Problems on the way, all in tooling, not in the application:** `docker login` to ECR fails with
+the Windows Credential Manager (token too long), solved with a throwaway Docker config in
+`push-image.sh`; Git Bash path conversion, solved with `cygpath` in the scripts.

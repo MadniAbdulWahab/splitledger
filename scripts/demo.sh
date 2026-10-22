@@ -12,7 +12,9 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://localhost:8080}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-SAMPLES="$ROOT/samples"
+# Native path for Windows programs (terraform.exe, docker.exe) when running in Git Bash.
+native_path() { if command -v cygpath > /dev/null; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+SAMPLES="$(native_path "$ROOT/samples")"
 RUN="demo-$(date +%s)"   # makes idempotency keys unique per run
 
 section() { printf '\n== %s\n' "$1"; }
@@ -75,7 +77,7 @@ echo "rent ignored; Ben sees $(api GET "/groups/$GROUP/bank-transactions" "$BEN"
 section "Ben adds a pizza night; his client retries the request after a timeout"
 PIZZA="{\"payerId\":$BEN_ID,\"amountCents\":3600,\"description\":\"Pizza night\",\"expenseDate\":\"2026-03-21\",\"splitMode\":\"EQUAL\",\"participants\":[{\"memberId\":$ANNA_ID},{\"memberId\":$BEN_ID}]}"
 for attempt in 1 2; do
-  replayed=$(json POST "/groups/$GROUP/expenses" "$BEN" "$PIZZA" -H "Idempotency-Key: $RUN-pizza" -D - -o /dev/null \
+  replayed=$(json POST "/groups/$GROUP/expenses" "$BEN" "$PIZZA" -H "Idempotency-Key: $RUN-pizza" -D - \
     | sed -n 's/^Idempotent-Replayed: \([a-z]*\).*/\1/ip')
   echo "attempt $attempt: Idempotent-Replayed=$replayed"
 done

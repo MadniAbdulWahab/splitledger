@@ -7,6 +7,10 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Native path for Windows programs (terraform.exe, docker.exe) when running in Git Bash.
+native_path() { if command -v cygpath > /dev/null; then cygpath -m "$1"; else printf '%s' "$1"; fi; }
+INFRA="$(native_path "$ROOT/infra/app")"
 REGION="${AWS_REGION:-eu-central-1}"
 
 if [ -n "$(git -C "$ROOT" status --porcelain -- api)" ]; then
@@ -14,12 +18,12 @@ if [ -n "$(git -C "$ROOT" status --porcelain -- api)" ]; then
   exit 1
 fi
 
-REPOSITORY="$(terraform -chdir="$ROOT/infra/app" output -raw ecr_repository_url)"
+REPOSITORY="$(terraform -chdir="$INFRA" output -raw ecr_repository_url)"
 TAG="$(git -C "$ROOT" rev-parse --short=12 HEAD)"
 REGISTRY="${REPOSITORY%%/*}"
 
 # Fargate runs X86_64 (see service.tf); build for it even on an ARM laptop.
-docker build --platform linux/amd64 --tag "$REPOSITORY:$TAG" "$ROOT/api" >&2
+docker build --platform linux/amd64 --tag "$REPOSITORY:$TAG" "$(native_path "$ROOT/api")" >&2
 
 # The ECR password is a 12-hour token derived from the current AWS login. It is too long for the
 # Windows Credential Manager ("The stub received bad data"), so login and push use a throwaway

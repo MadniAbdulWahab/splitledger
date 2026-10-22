@@ -24,7 +24,8 @@ Built in daily steps (see [docs/verification.md](docs/verification.md) for dated
 | Groups, members with IBAN check, expenses with idempotency keys, double-entry ledger, balances | done (day 1) |
 | Hash chain with `/verify`, reversals, append-only trigger, full-text and typo-tolerant search | done (day 2) |
 | API tokens and group membership checks, Sparkasse CSV import, settle-up and payments, OpenAPI, demo script | done (day 3) |
-| AWS (ECS Fargate, RDS) with Terraform, CI/CD, CloudWatch | planned (days 4-5) |
+| AWS with Terraform: VPC without NAT, RDS PostgreSQL, ECR, ECS Fargate, SSM secrets, least-privilege IAM and database roles, budget alert | done (day 4) |
+| Deploy pipeline (GitHub OIDC), CloudWatch alarms and dashboard | planned (day 5) |
 
 ## Run locally
 
