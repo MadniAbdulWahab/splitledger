@@ -380,3 +380,24 @@ Screenshots from AWS: [desktop](evidence/2026-10-22-web-page-on-aws.png),
 
 **Deploy history (all through GitHub OIDC):** 9 runs; the first two failed (trust policy subject,
 then the CI check), the seven after them succeeded.
+
+## 2026-10-22: stack destroyed
+
+After the evidence above, `terraform destroy` in `infra/app` (21:22 UTC):
+
+```
+Plan: 0 to add, 0 to change, 58 to destroy.
+aws_db_instance.main: Destruction complete after 1m51s
+Apply complete! Resources: 0 added, 0 changed, 58 destroyed.
+terraform state list: 0 resources
+```
+
+Checked in the account afterwards: no RDS instances, automated backups or snapshots (the automated
+snapshot `rds:splitledger-db-2026-10-22-15-29` was removed by AWS a few minutes after the instance),
+no ECS clusters, ECR repositories, Lambda functions, SQS queues, S3 buckets, non-default VPCs, NAT
+gateways, Elastic IPs, SplitLedger log groups, SSM parameters or alarms. Only the budget
+`splitledger-monthly` from `infra/bootstrap` remains, as intended.
+
+The application stack ran from 15:28 to 21:22 UTC (about six hours, roughly 0.30 USD of Free-plan
+credits). It can be recreated from Terraform in about ten minutes; the GitHub Deploy workflow fails
+until it is.
