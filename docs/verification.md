@@ -437,3 +437,9 @@ a different payer, amount and date; app role cannot update or delete `correction
 **Browser walkthrough** against `docker compose up --build` (new steps: Share opens the form filled
 from the bank, undo a payment, delete an expense, edit an expense; the overview ends at "Ben owes
 you 87,00"): `Walkthrough passed: desktop and phone`.
+
+**Destroyed again** after the manual tests (2026-10-23): `Apply complete! Resources: 0 added, 0
+changed, 58 destroyed.`, `terraform state list` empty. In the account afterwards: no RDS instances,
+ECS clusters, Lambda functions, Elastic IPs or NAT gateways; only the budget and the automated RDS
+snapshot, which AWS removes after the instance (as on 2026-10-22). Everyday use moves to the free
+Oracle Cloud host (`deploy/free-host`).
