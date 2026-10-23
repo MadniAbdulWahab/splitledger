@@ -443,3 +443,20 @@ changed, 58 destroyed.`, `terraform state list` empty. In the account afterwards
 ECS clusters, Lambda functions, Elastic IPs or NAT gateways; only the budget and the automated RDS
 snapshot, which AWS removes after the instance (as on 2026-10-22). Everyday use moves to the free
 Oracle Cloud host (`deploy/free-host`).
+
+## 2026-10-23: free hosting on Oracle Cloud
+
+`deploy/free-host` set up by Abdul on an Oracle Cloud Always Free VM (VM.Standard.A1.Flex, 2 OCPU,
+12 GB, Ubuntu 24.04, eu-frankfurt-1) with the DuckDNS name `splitledger-madni.duckdns.org`: ports
+80 and 443 opened in the OCI security list and the host firewall, Docker installed, `.env` with
+random passwords generated on the VM, `docker compose up -d --build`. From the start-up log:
+
+```
+Image splitledger-free-host-api  Built  103.1s   (on the ARM VM)
+Successfully applied 9 migrations to schema "public", now at version v9
+Started SplitledgerApiApplication in 21.379 seconds
+GET / -> 200, GET /assets/index-….js -> 200      (requests through Caddy)
+```
+
+Not yet checked from outside: the certificate details and a full walkthrough against the HTTPS
+address.
