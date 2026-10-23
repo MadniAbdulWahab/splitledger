@@ -458,5 +458,11 @@ Started SplitledgerApiApplication in 21.379 seconds
 GET / -> 200, GET /assets/index-….js -> 200      (requests through Caddy)
 ```
 
-Not yet checked from outside: the certificate details and a full walkthrough against the HTTPS
-address.
+Checked from outside the same day:
+
+```
+https://splitledger-madni.duckdns.org/            200, certificate valid
+http://splitledger-madni.duckdns.org/             308 -> https://…
+https://splitledger-madni.duckdns.org/actuator/health   404 (kept internal)
+certificate: issuer Let's Encrypt (YE1), valid until 2027-01-20
+```
