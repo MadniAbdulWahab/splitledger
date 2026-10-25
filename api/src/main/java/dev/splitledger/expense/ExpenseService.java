@@ -59,11 +59,11 @@ public class ExpenseService {
     }
 
     /** Creates an expense and its ledger entries exactly once per (group, idempotency key). */
-    public Creation create(long groupId, String idempotencyKey, CreateExpenseRequest request) {
+    public Creation create(long groupId, String idempotencyKey, CreateExpenseRequest request, long createdBy) {
         String requestHash = Sha256.hex(request.canonicalForm());
         return idempotentCreator.create(IDEMPOTENCY_CONSTRAINT,
                 () -> findEarlier(groupId, idempotencyKey, requestHash),
-                () -> insert(groupId, idempotencyKey, requestHash, request, null)).value();
+                () -> insert(groupId, idempotencyKey, requestHash, request, null, createdBy)).value();
     }
 
     /**
@@ -73,11 +73,11 @@ public class ExpenseService {
      */
     @Transactional(propagation = Propagation.MANDATORY)
     public ExpenseResponse createInTransaction(long groupId, String idempotencyKey, CreateExpenseRequest request,
-                                               String bankPurpose) {
+                                               String bankPurpose, long createdBy) {
         if (request.amountCents() > ExpenseDtos.MAX_AMOUNT_CENTS) {
             throw new BusinessRuleException("Amount is above the limit of " + ExpenseDtos.MAX_AMOUNT_CENTS + " cents");
         }
-        return insert(groupId, idempotencyKey, Sha256.hex(request.canonicalForm()), request, bankPurpose).expense();
+        return insert(groupId, idempotencyKey, Sha256.hex(request.canonicalForm()), request, bankPurpose, createdBy).expense();
     }
 
     public ExpenseResponse get(long groupId, long expenseId) {
@@ -110,7 +110,7 @@ public class ExpenseService {
                     () -> findEarlier(groupId, idempotencyKey, requestHash),
                     () -> {
                         Expense original = cancel(groupId, expenseId);
-                        Creation created = insert(groupId, idempotencyKey, requestHash, request, original.getBankPurpose());
+                        Creation created = insert(groupId, idempotencyKey, requestHash, request, original.getBankPurpose(), memberId);
                         corrections.expenseEdited(groupId, expenseId, created.expense().id(), memberId);
                         return created;
                     }).value();
@@ -157,7 +157,7 @@ public class ExpenseService {
     }
 
     private Creation insert(long groupId, String idempotencyKey, String requestHash, CreateExpenseRequest request,
-                            String bankPurpose) {
+                            String bankPurpose, long createdBy) {
         Set<Long> memberIds = groupService.memberIds(groupId);
         if (!memberIds.contains(request.payerId())) {
             throw new BusinessRuleException("Payer " + request.payerId() + " is not a member of group " + groupId);
@@ -178,7 +178,7 @@ public class ExpenseService {
         List<Allocation> allocations = SplitCalculator.split(request.amountCents(), request.splitMode(), participants);
         Expense expense = expenses.save(new Expense(groupId, request.payerId(), request.amountCents(),
                 request.description().strip(), request.notes(), request.expenseDate(), request.splitMode(),
-                idempotencyKey, requestHash, bankPurpose, allocations));
+                idempotencyKey, requestHash, bankPurpose, allocations, request.category(), createdBy));
 
         List<Posting> postings = postingsFor(expense, allocations);
         ledgerService.post(groupId, EntryKind.EXPENSE, expense.getId(), postings);

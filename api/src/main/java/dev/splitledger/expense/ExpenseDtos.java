@@ -30,11 +30,13 @@ public final class ExpenseDtos {
             @Size(max = 2000) String notes,
             @NotNull LocalDate expenseDate,
             @NotNull SplitMode splitMode,
-            @NotEmpty @Size(max = 50) List<@Valid @NotNull ParticipantRequest> participants) {
+            @NotEmpty @Size(max = 50) List<@Valid @NotNull ParticipantRequest> participants,
+            Category category) {
 
         /**
          * Deterministic text form of the request, hashed to detect "same Idempotency-Key, different
-         * body". Participants are sorted so their order in the JSON does not matter.
+         * body". Participants are sorted so their order in the JSON does not matter. The category is
+         * only added when set, so requests from before categories existed keep their hash.
          */
         String canonicalForm() {
             List<Object> values = new ArrayList<>();
@@ -50,6 +52,9 @@ public final class ExpenseDtos {
                         values.add(p.memberId());
                         values.add(p.value());
                     });
+            if (category != null) {
+                values.add("category " + category);
+            }
             return CanonicalText.of(values.toArray());
         }
     }
@@ -73,7 +78,9 @@ public final class ExpenseDtos {
             List<ShareResponse> shares,
             String bankPurpose,
             boolean reversed,
-            Instant createdAt) {
+            Instant createdAt,
+            Category category,
+            Long createdBy) {
 
         static ExpenseResponse from(Expense expense, boolean reversed) {
             List<ShareResponse> shares = expense.getShares().stream()
@@ -82,7 +89,7 @@ public final class ExpenseDtos {
             return new ExpenseResponse(expense.getId(), expense.getGroupId(), expense.getPayerId(),
                     expense.getAmountCents(), expense.getDescription(), expense.getNotes(),
                     expense.getExpenseDate(), expense.getSplitMode(), shares, expense.getBankPurpose(), reversed,
-                    expense.getCreatedAt());
+                    expense.getCreatedAt(), expense.getCategory(), expense.getCreatedBy());
         }
     }
 }

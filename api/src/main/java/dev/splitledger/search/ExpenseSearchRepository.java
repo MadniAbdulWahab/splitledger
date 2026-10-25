@@ -33,6 +33,7 @@ class ExpenseSearchRepository {
             rs.getObject("changed_by", Long.class),
             rs.getTimestamp("changed_at") != null ? rs.getTimestamp("changed_at").toInstant() : null,
             rs.getObject("replaces_expense_id", Long.class),
+            rs.getString("category"),
             rs.getDouble("score"));
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -97,6 +98,12 @@ class ExpenseSearchRepository {
             where.append(" and e.amount_cents <= :max");
         }
 
+        if (c.category() != null) {
+            params.addValue("category", c.category());
+            // Expenses without a category count as OTHER, as the page shows them.
+            where.append(" and coalesce(e.category, 'OTHER') = :category");
+        }
+
         String afterCursor = "";
         if (c.after() != null) {
             params.addValue("afterScore", c.after().score());
@@ -118,7 +125,7 @@ class ExpenseSearchRepository {
                 from (
                     select * from (
                         select e.id, e.payer_id, e.amount_cents, e.description, e.notes, e.expense_date,
-                               %s as score
+                               e.category, %s as score
                         from expense e %s
                         where %s
                     ) scored

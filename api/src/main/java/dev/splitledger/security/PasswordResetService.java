@@ -60,10 +60,11 @@ public class PasswordResetService {
         String code = SecretCodes.generate(PREFIX);
         Instant expiresAt = Instant.now().plus(VALID_FOR).truncatedTo(ChronoUnit.SECONDS);
         jdbc.update("""
-                        insert into password_reset (user_id, group_id, created_by_member_id, code_hash, expires_at)
-                        values (?, ?, ?, ?, ?)""",
+                        insert into password_reset (user_id, group_id, created_by_member_id, code_hash, created_at, expires_at)
+                        values (?, ?, ?, ?, ?, ?)""",
                 member.getUserId(), groupId, groupService.memberIdOf(groupId, creator), SecretCodes.hash(code),
-                Timestamp.from(expiresAt));
+                // The application's clock, like every other entry of the activity feed.
+                Timestamp.from(Instant.now().truncatedTo(ChronoUnit.MICROS)), Timestamp.from(expiresAt));
         return new ResetLink(memberId, code, expiresAt);
     }
 

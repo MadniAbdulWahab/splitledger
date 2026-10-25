@@ -62,6 +62,15 @@ public class Expense {
     @Column(name = "bank_purpose", updatable = false)
     private String bankPurpose;
 
+    /** Null for expenses from before V11. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 20, updatable = false)
+    private Category category;
+
+    /** The member who entered the expense; null for expenses from before V11. */
+    @Column(name = "created_by", updatable = false)
+    private Long createdBy;
+
     @ElementCollection
     @CollectionTable(name = "expense_share", joinColumns = @JoinColumn(name = "expense_id"))
     @OrderBy("memberId")
@@ -72,8 +81,10 @@ public class Expense {
 
     Expense(Long groupId, Long payerId, long amountCents, String description, String notes,
             LocalDate expenseDate, SplitMode splitMode, String idempotencyKey, String requestHash,
-            String bankPurpose, List<Allocation> allocations) {
+            String bankPurpose, List<Allocation> allocations, Category category, Long createdBy) {
         this.bankPurpose = bankPurpose;
+        this.category = category;
+        this.createdBy = createdBy;
         this.groupId = groupId;
         this.payerId = payerId;
         this.amountCents = amountCents;
@@ -135,5 +146,13 @@ public class Expense {
 
     public List<ExpenseShare> getShares() {
         return List.copyOf(shares);
+    }
+
+    public Category getCategory() {
+        return category;
+    }
+
+    public Long getCreatedBy() {
+        return createdBy;
     }
 }

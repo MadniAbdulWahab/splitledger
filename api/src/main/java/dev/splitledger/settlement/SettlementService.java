@@ -153,11 +153,12 @@ public class SettlementService {
      * Records that a payment happened. Ledger: +amount for the payer (their debt shrinks), -amount
      * for the receiver (their claim shrinks). Idempotent per key, like expenses.
      */
-    public IdempotentCreator.Result<PaymentResponse> record(long groupId, String idempotencyKey, RecordPaymentRequest request) {
+    public IdempotentCreator.Result<PaymentResponse> record(long groupId, String idempotencyKey, RecordPaymentRequest request,
+                                                            long createdBy) {
         String requestHash = Sha256.hex(request.canonicalForm());
         return idempotentCreator.create(IDEMPOTENCY_CONSTRAINT,
                 () -> findEarlier(groupId, idempotencyKey, requestHash),
-                () -> insert(groupId, idempotencyKey, requestHash, request));
+                () -> insert(groupId, idempotencyKey, requestHash, request, createdBy));
     }
 
     private Map<Long, MemberResponse> membersById(long groupId) {
@@ -208,7 +209,8 @@ public class SettlementService {
         });
     }
 
-    private PaymentResponse insert(long groupId, String idempotencyKey, String requestHash, RecordPaymentRequest request) {
+    private PaymentResponse insert(long groupId, String idempotencyKey, String requestHash, RecordPaymentRequest request,
+                                   long createdBy) {
         if (request.fromMemberId().equals(request.toMemberId())) {
             throw new BusinessRuleException("A payment needs two different members");
         }
@@ -217,7 +219,7 @@ public class SettlementService {
             throw new BusinessRuleException("Both members must belong to group " + groupId);
         }
         Payment payment = payments.save(new Payment(groupId, request.fromMemberId(), request.toMemberId(),
-                request.amountCents(), request.note(), idempotencyKey, requestHash));
+                request.amountCents(), request.note(), idempotencyKey, requestHash, createdBy));
         List<Posting> postings = List.of(
                 new Posting(request.fromMemberId(), request.amountCents()),
                 new Posting(request.toMemberId(), -request.amountCents()));

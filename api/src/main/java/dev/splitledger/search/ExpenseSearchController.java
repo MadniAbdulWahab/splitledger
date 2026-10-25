@@ -1,5 +1,6 @@
 package dev.splitledger.search;
 
+import dev.splitledger.expense.Category;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.PositiveOrZero;
@@ -24,7 +25,7 @@ class ExpenseSearchController {
     }
 
     /**
-     * Example: {@code /groups/1/expenses/search?q=einkauf lidl&member=2&from=2026-03-01&to=2026-03-31}.
+     * Example: {@code /groups/1/expenses/search?q=einkauf lidl&member=2&from=2026-03-01&to=2026-03-31&category=GROCERIES}.
      * Without {@code q} all expenses matching the filters are returned, newest id first. Pass the
      * returned {@code nextCursor} as {@code cursor} to get the next page.
      */
@@ -37,6 +38,7 @@ class ExpenseSearchController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) @PositiveOrZero Long min,
             @RequestParam(required = false) @PositiveOrZero Long max,
+            @RequestParam(required = false) Category category,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int limit,
             @RequestParam(required = false) String cursor) {
         Cursor after;
@@ -45,6 +47,7 @@ class ExpenseSearchController {
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "cursor is not valid; use nextCursor from the previous page");
         }
-        return searchService.search(new SearchCriteria(groupId, q, member, from, to, min, max, limit, after));
+        return searchService.search(new SearchCriteria(groupId, q, member, from, to, min, max,
+                category == null ? null : category.name(), limit, after));
     }
 }

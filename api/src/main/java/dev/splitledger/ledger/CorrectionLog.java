@@ -3,7 +3,9 @@ package dev.splitledger.ledger;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -27,19 +29,29 @@ public class CorrectionLog {
     }
 
     public void expenseDeleted(long groupId, long expenseId, long memberId) {
-        jdbc.update("insert into correction (group_id, kind, expense_id, member_id) values (?, 'EXPENSE_DELETED', ?, ?)",
-                groupId, expenseId, memberId);
+        jdbc.update("""
+                insert into correction (group_id, kind, expense_id, member_id, created_at)
+                values (?, 'EXPENSE_DELETED', ?, ?, ?)""", groupId, expenseId, memberId, now());
     }
 
     public void expenseEdited(long groupId, long expenseId, long replacementId, long memberId) {
         jdbc.update("""
-                insert into correction (group_id, kind, expense_id, replacement_expense_id, member_id)
-                values (?, 'EXPENSE_EDITED', ?, ?, ?)""", groupId, expenseId, replacementId, memberId);
+                insert into correction (group_id, kind, expense_id, replacement_expense_id, member_id, created_at)
+                values (?, 'EXPENSE_EDITED', ?, ?, ?, ?)""", groupId, expenseId, replacementId, memberId, now());
     }
 
     public void paymentUndone(long groupId, long paymentId, long memberId) {
-        jdbc.update("insert into correction (group_id, kind, payment_id, member_id) values (?, 'PAYMENT_UNDONE', ?, ?)",
-                groupId, paymentId, memberId);
+        jdbc.update("""
+                insert into correction (group_id, kind, payment_id, member_id, created_at)
+                values (?, 'PAYMENT_UNDONE', ?, ?, ?)""", groupId, paymentId, memberId, now());
+    }
+
+    /**
+     * The application's clock, like the created_at of expenses and payments, so the activity feed
+     * orders all of them by one clock (the database container's clock can differ by milliseconds).
+     */
+    private static Timestamp now() {
+        return Timestamp.from(Instant.now().truncatedTo(ChronoUnit.MICROS));
     }
 
     /** Payment id to the person who undid it, for one group. */

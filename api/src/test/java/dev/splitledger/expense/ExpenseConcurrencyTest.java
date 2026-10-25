@@ -41,7 +41,7 @@ class ExpenseConcurrencyTest extends IntegrationTest {
         long ben = addMember(groupId, "Ben");
         CreateExpenseRequest request = request(anna, 1234, List.of(anna, ben));
 
-        List<ExpenseService.Creation> results = runConcurrently(i -> expenseService.create(groupId, "same-key", request));
+        List<ExpenseService.Creation> results = runConcurrently(i -> expenseService.create(groupId, "same-key", request, anna));
 
         assertThat(results).extracting(c -> c.expense().id()).containsOnly(results.getFirst().expense().id());
         assertThat(results).filteredOn(c -> !c.replayed()).hasSize(1);
@@ -58,7 +58,7 @@ class ExpenseConcurrencyTest extends IntegrationTest {
         List<Long> members = List.of(anna, ben, cem);
 
         runConcurrently(i -> expenseService.create(groupId, "key-" + i,
-                request(members.get(i % 3), 1000 + i, members)));
+                request(members.get(i % 3), 1000 + i, members), anna));
 
         assertThat(count("select count(*) from expense where group_id = ?", groupId)).isEqualTo(THREADS);
         assertThat(count("select coalesce(sum(amount_cents), 0) from ledger_entry where group_id = ?", groupId)).isZero();
@@ -123,7 +123,7 @@ class ExpenseConcurrencyTest extends IntegrationTest {
 
     private static CreateExpenseRequest request(long payer, long amountCents, List<Long> participants) {
         return new CreateExpenseRequest(payer, amountCents, "Concurrent", null, LocalDate.of(2026, 10, 20),
-                SplitMode.EQUAL, participants.stream().map(id -> new ParticipantRequest(id, null)).toList());
+                SplitMode.EQUAL, participants.stream().map(id -> new ParticipantRequest(id, null)).toList(), null);
     }
 
     private long count(String sql, long groupId) {

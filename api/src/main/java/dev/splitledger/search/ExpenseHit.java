@@ -8,6 +8,7 @@ import java.time.LocalDate;
  *
  * <p>{@code change} is DELETED or EDITED when a member corrected this expense ({@code changedBy},
  * {@code changedAt}); {@code replacesExpenseId} is set on the new version of an edited expense.
+ * {@code category} is null for expenses from before categories existed.
  */
 public record ExpenseHit(
         long id,
@@ -21,5 +22,6 @@ public record ExpenseHit(
         Long changedBy,
         Instant changedAt,
         Long replacesExpenseId,
+        String category,
         double score) {
 }

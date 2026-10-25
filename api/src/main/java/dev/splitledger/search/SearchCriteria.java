@@ -11,6 +11,7 @@ record SearchCriteria(
         LocalDate to,
         Long minCents,
         Long maxCents,
+        String category,
         int limit,
         Cursor after) {
 

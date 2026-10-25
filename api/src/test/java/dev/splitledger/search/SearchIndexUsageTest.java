@@ -44,7 +44,7 @@ class SearchIndexUsageTest extends IntegrationTest {
         // planner rightly prefers a sequential scan right after a bulk insert. ANALYZE alone is not enough.
         jdbc.execute("vacuum analyze expense");
 
-        SearchCriteria criteria = new SearchCriteria(groupId, "Geschenk Jonas", null, null, null, null, null, 20, null);
+        SearchCriteria criteria = new SearchCriteria(groupId, "Geschenk Jonas", null, null, null, null, null, null, 20, null);
         List<String> plan = new TransactionTemplate(transactionManager).execute(status -> {
             repository.useTypoThreshold();
             ExpenseSearchRepository.Query query = repository.build(criteria);
@@ -64,6 +64,16 @@ class SearchIndexUsageTest extends IntegrationTest {
                 + Duration.ofNanos(System.nanoTime() - started).toMillis() + " ms (including the round trip)");
         assertThat(page.items()).hasSize(20).allSatisfy(hit -> assertThat(hit.notes()).isEqualTo("Geschenk für Jonas"));
         assertThat(page.nextCursor()).isNotNull();
+
+        // The category filter narrows the index hits; it does not turn the search into a full scan.
+        SearchCriteria withCategory = new SearchCriteria(groupId, "Geschenk Jonas", null, null, null, null, null,
+                "GIFTS", 20, null);
+        List<String> categoryPlan = new TransactionTemplate(transactionManager).execute(status -> {
+            repository.useTypoThreshold();
+            ExpenseSearchRepository.Query query = repository.build(withCategory);
+            return namedJdbc.queryForList("explain " + query.sql(), query.params(), String.class);
+        });
+        assertThat(String.join("\n", categoryPlan)).contains("expense_search_idx").doesNotContain("Seq Scan on expense");
     }
 
     /**

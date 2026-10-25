@@ -198,11 +198,14 @@ class BankImportApiTest extends IntegrationTest {
                 .content("""
                         {"description": "Party drinks", "splitMode": "EQUAL",
                          "participants": [{"memberId": %d}, {"memberId": %d}],
-                         "payerId": %d, "amountCents": 2000, "expenseDate": "2026-03-05"}
+                         "payerId": %d, "amountCents": 2000, "expenseDate": "2026-03-05", "category": "FOOD"}
                         """.formatted(anna, ben, ben))
                 .exchange();
 
         assertThat(confirmed).hasStatus(201);
+        assertThat(confirmed).bodyJson().extractingPath("$.category").isEqualTo("FOOD");
+        // Anna shared it from her statement, although Ben paid.
+        assertThat(confirmed).bodyJson().extractingPath("$.createdBy").asNumber().isEqualTo((int) anna);
         assertThat(confirmed).bodyJson().extractingPath("$.payerId").asNumber().isEqualTo((int) ben);
         assertThat(confirmed).bodyJson().extractingPath("$.amountCents").isEqualTo(2000);
         assertThat(confirmed).bodyJson().extractingPath("$.expenseDate").isEqualTo("2026-03-05");

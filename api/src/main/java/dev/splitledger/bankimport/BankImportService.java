@@ -125,9 +125,9 @@ public class BankImportService {
                 request.amountCents() != null ? request.amountCents() : -t.getAmountCents(),
                 description, request.notes(),
                 request.expenseDate() != null ? request.expenseDate() : t.getBookingDate(),
-                request.splitMode(), request.participants());
+                request.splitMode(), request.participants(), request.category());
         ExpenseResponse created = expenseService.createInTransaction(groupId, "bank-transaction-" + t.getId(),
-                expense, t.getPurpose());
+                expense, t.getPurpose(), memberId);
         t.confirm(created.id());
         return created;
     }

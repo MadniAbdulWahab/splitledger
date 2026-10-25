@@ -40,10 +40,11 @@ class ExpenseController {
      */
     @PostMapping
     ResponseEntity<ExpenseResponse> create(@PathVariable long groupId,
+                                           @AuthenticationPrincipal CurrentUser user,
                                            @RequestHeader(IDEMPOTENCY_KEY) String idempotencyKey,
                                            @Valid @RequestBody CreateExpenseRequest request) {
         checkKey(idempotencyKey);
-        return created(expenseService.create(groupId, idempotencyKey, request));
+        return created(expenseService.create(groupId, idempotencyKey, request, groupService.memberIdOf(groupId, user)));
     }
 
     @GetMapping("/{expenseId}")

@@ -2,6 +2,7 @@ package dev.splitledger.bankimport;
 
 import dev.splitledger.expense.ExpenseDtos.ParticipantRequest;
 import dev.splitledger.expense.SplitMode;
+import dev.splitledger.expense.Category;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -48,6 +49,7 @@ public final class BankImportDtos {
             @NotEmpty @Size(max = 50) List<@Valid @NotNull ParticipantRequest> participants,
             Long payerId,
             @Positive Long amountCents,
-            LocalDate expenseDate) {
+            LocalDate expenseDate,
+            Category category) {
     }
 }

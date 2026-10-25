@@ -64,12 +64,14 @@ class SettlementController {
 
     @PostMapping("/groups/{groupId}/payments")
     ResponseEntity<PaymentResponse> record(@PathVariable long groupId,
+                                           @AuthenticationPrincipal CurrentUser user,
                                            @RequestHeader("Idempotency-Key") String idempotencyKey,
                                            @Valid @RequestBody RecordPaymentRequest request) {
         if (idempotencyKey.isBlank() || idempotencyKey.length() > 100) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Idempotency-Key must be 1 to 100 characters");
         }
-        IdempotentCreator.Result<PaymentResponse> result = settlementService.record(groupId, idempotencyKey, request);
+        IdempotentCreator.Result<PaymentResponse> result = settlementService.record(groupId, idempotencyKey, request,
+                groupService.memberIdOf(groupId, user));
         return ResponseEntity.status(HttpStatus.CREATED)
                 .header("Idempotent-Replayed", String.valueOf(result.replayed()))
                 .body(result.value());

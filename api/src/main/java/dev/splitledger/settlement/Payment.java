@@ -45,11 +45,16 @@ class Payment {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    /** The member who recorded it; null for payments from before V11. */
+    @Column(name = "created_by")
+    private Long createdBy;
+
     protected Payment() {
     }
 
     Payment(long groupId, long fromMemberId, long toMemberId, long amountCents, String note,
-            String idempotencyKey, String requestHash) {
+            String idempotencyKey, String requestHash, long createdBy) {
+        this.createdBy = createdBy;
         this.groupId = groupId;
         this.fromMemberId = fromMemberId;
         this.toMemberId = toMemberId;

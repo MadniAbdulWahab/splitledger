@@ -71,7 +71,7 @@ class SecurityApiTest extends IntegrationTest {
 
         String[] getPaths = {"/groups/{g}", "/groups/{g}/members", "/groups/{g}/balances", "/groups/{g}/verify",
                 "/groups/{g}/expenses/search?q=dinner", "/groups/{g}/expenses/" + expenseId,
-                "/groups/{g}/settlement", "/groups/{g}/bank-transactions"};
+                "/groups/{g}/settlement", "/groups/{g}/bank-transactions", "/groups/{g}/insights", "/groups/{g}/activity"};
         for (String path : getPaths) {
             assertThat(stranger.get().uri(path, groupId)).as(path).hasStatus(403);
         }
