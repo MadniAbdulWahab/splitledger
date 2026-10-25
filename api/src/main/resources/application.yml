@@ -33,3 +33,8 @@ management:
     health:
       probes:
         enabled: true
+
+server:
+  # The web app's manifest (installing it on a phone) has its own media type.
+  mime-mappings:
+    webmanifest: application/manifest+json

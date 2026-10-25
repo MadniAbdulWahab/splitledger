@@ -13,6 +13,9 @@ export default defineConfig({
       '/me': api,
       '/groups': api,
       '/invitations': api,
+      '/sessions': api,
+      '/logout': api,
+      '/password-resets': api,
     },
   },
   build: {

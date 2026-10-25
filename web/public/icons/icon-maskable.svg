@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Maskable: full-bleed background, the coin inside the 80% safe zone the launcher may crop to. -->
+  <rect width="512" height="512" fill="#23195c"/>
+  <path d="M247 140a116 116 0 0 0 0 232z" fill="#ffffff"/>
+  <path d="M265 140a116 116 0 0 1 0 232z" fill="#8e80ff"/>
+</svg>

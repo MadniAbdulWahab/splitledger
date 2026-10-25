@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- A coin split in two on the plum of the group card: SplitLedger in one shape. -->
+  <rect width="512" height="512" rx="112" fill="#23195c"/>
+  <g fill="none" stroke="#8e80ff" stroke-width="3" opacity="0.35">
+    <circle cx="256" cy="256" r="190"/>
+    <circle cx="256" cy="256" r="206"/>
+  </g>
+  <path d="M244 96a160 160 0 0 0 0 320z" fill="#ffffff"/>
+  <path d="M268 96a160 160 0 0 1 0 320z" fill="#8e80ff"/>
+</svg>

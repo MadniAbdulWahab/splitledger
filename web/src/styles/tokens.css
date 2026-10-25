@@ -1,0 +1,84 @@
+/*
+ * Design tokens. Light by default; dark follows the system unless the account settings chose a
+ * theme (data-theme on <html>). Member colours come from the euro banknotes (avatar.ts).
+ */
+:root {
+  --paper: #f3f4f7;
+  --surface: #ffffff;
+  --surface-2: #eceef3;
+  --ink: #1a1c2e;
+  --muted: #61657a;
+  --line: #e1e3ea;
+  --giro: #5847e0;
+  --giro-hover: #4a3acb;
+  --giro-soft: #ecebfd;
+  --on-giro: #ffffff;
+  --owed: #0b8f62;
+  --owed-soft: #e2f4ec;
+  --owe: #d23c55;
+  --owe-soft: #fbe7ea;
+  --card: #23195c;
+  --card-line: #8e80ff;
+  --card-ink: #ffffff;
+  --card-muted: #c9c3f5;
+  --shadow-float: 0 12px 32px -12px rgb(35 25 92 / 45%);
+  --shadow-sheet: 0 -8px 40px rgb(26 28 46 / 18%);
+  /* Chart series, checked for colour-vision deficiencies and contrast in both modes. */
+  --series-1: #5847e0;
+  --series-2: #eb6834;
+  --radius-card: 22px;
+  --radius-surface: 16px;
+  --radius-control: 12px;
+  --nav-height: 64px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1020;
+    --surface: #191a2e;
+    --surface-2: #23243b;
+    --ink: #ecedf6;
+    --muted: #a3a6bd;
+    --line: #2c2e47;
+    --giro: #8f82ff;
+    --giro-hover: #a499ff;
+    --giro-soft: #2a2752;
+    --on-giro: #12102e;
+    --owed: #3fcf95;
+    --owed-soft: #15372b;
+    --owe: #ff7088;
+    --owe-soft: #3d1c25;
+    --card: #2a2170;
+    --card-line: #a99eff;
+    --shadow-float: 0 12px 32px -12px rgb(0 0 0 / 70%);
+    --shadow-sheet: 0 -8px 40px rgb(0 0 0 / 50%);
+    --series-1: #7d6ff5;
+    --series-2: #d95926;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --paper: #0f1020;
+  --surface: #191a2e;
+  --surface-2: #23243b;
+  --ink: #ecedf6;
+  --muted: #a3a6bd;
+  --line: #2c2e47;
+  --giro: #8f82ff;
+  --giro-hover: #a499ff;
+  --giro-soft: #2a2752;
+  --on-giro: #12102e;
+  --owed: #3fcf95;
+  --owed-soft: #15372b;
+  --owe: #ff7088;
+  --owe-soft: #3d1c25;
+  --card: #2a2170;
+  --card-line: #a99eff;
+  --shadow-float: 0 12px 32px -12px rgb(0 0 0 / 70%);
+  --shadow-sheet: 0 -8px 40px rgb(0 0 0 / 50%);
+  --series-1: #7d6ff5;
+  --series-2: #d95926;
+  color-scheme: dark;
+}
