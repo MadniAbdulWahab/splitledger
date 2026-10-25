@@ -40,9 +40,13 @@ class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/actuator/health/**", "/actuator/info", "/error").permitAll()
                         .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/users").permitAll()
+                        // Creating an account, signing in and the two kinds of links people receive.
+                        .requestMatchers(HttpMethod.POST, "/users", "/sessions", "/invitations/preview",
+                                "/invitations/signup", "/password-resets", "/password-resets/preview").permitAll()
                         // The web page itself is public; everything it does goes through the API with a token.
-                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/assets/**", "/favicon.svg", "/favicon.ico").permitAll()
+                        // manifest, service worker and icons make it installable as an app.
+                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/assets/**", "/favicon.svg", "/favicon.ico",
+                                "/manifest.webmanifest", "/sw.js", "/icons/**").permitAll()
                         .requestMatchers("/groups/{groupId}", "/groups/{groupId}/**").access(groupMembership)
                         .anyRequest().authenticated())
                 .exceptionHandling(errors -> errors

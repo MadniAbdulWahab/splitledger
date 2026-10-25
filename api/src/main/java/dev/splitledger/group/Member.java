@@ -40,6 +40,14 @@ public class Member {
     @Column(name = "invite_code_hash", length = 64)
     private String inviteCodeHash;
 
+    /** The member who added this one; null for the group's creator and members added before V10. */
+    @Column(name = "invited_by")
+    private Long invitedBy;
+
+    /** When the account was linked: at creation for the creator, on accepting the invite otherwise. */
+    @Column(name = "joined_at")
+    private Instant joinedAt;
+
     protected Member() {
     }
 
@@ -54,13 +62,20 @@ public class Member {
     static Member forUser(Long groupId, String displayName, long userId) {
         Member member = new Member(groupId, displayName, null, null);
         member.userId = userId;
+        member.joinedAt = member.createdAt;
         return member;
     }
 
-    static Member invited(Long groupId, String displayName, String iban, String bic, String inviteCodeHash) {
+    static Member invited(Long groupId, String displayName, String iban, String bic, String inviteCodeHash, long invitedBy) {
         Member member = new Member(groupId, displayName, iban, bic);
         member.inviteCodeHash = inviteCodeHash;
+        member.invitedBy = invitedBy;
         return member;
+    }
+
+    /** A new invite link replaces the old one, which stops working. */
+    void replaceInviteCode(String inviteCodeHash) {
+        this.inviteCodeHash = inviteCodeHash;
     }
 
     void changeBankDetails(String iban, String bic) {
@@ -72,6 +87,7 @@ public class Member {
     void acceptInvitation(long userId) {
         this.userId = userId;
         this.inviteCodeHash = null;
+        this.joinedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
     public Long getUserId() {
@@ -100,5 +116,9 @@ public class Member {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Long getInvitedBy() {
+        return invitedBy;
     }
 }

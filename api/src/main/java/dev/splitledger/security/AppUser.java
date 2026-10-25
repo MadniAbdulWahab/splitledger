@@ -27,6 +27,14 @@ public class AppUser {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** Lower case; null for accounts that only have an API token. */
+    @Column(length = 30)
+    private String username;
+
+    /** bcrypt; null until the user sets a password. */
+    @Column(name = "password_hash", length = 100)
+    private String passwordHash;
+
     protected AppUser() {
     }
 
@@ -36,11 +44,27 @@ public class AppUser {
         this.createdAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
     }
 
+    void changeUsername(String username) {
+        this.username = username;
+    }
+
+    void changePasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
+    }
+
     public Long getId() {
         return id;
     }
 
     public String getDisplayName() {
         return displayName;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    String getPasswordHash() {
+        return passwordHash;
     }
 }

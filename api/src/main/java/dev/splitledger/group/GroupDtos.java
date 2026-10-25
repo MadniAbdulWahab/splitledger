@@ -48,7 +48,15 @@ public final class GroupDtos {
     public record AddedMemberResponse(MemberResponse member, String inviteCode) {
     }
 
-    public record AcceptInvitationRequest(@NotBlank String code) {
+    public record AcceptInvitationRequest(@NotBlank @Size(max = 100) String code) {
+    }
+
+    /** What the invite link page shows before the friend has an account: "Anna invited you to WG". */
+    public record InvitationPreview(String groupName, String memberName, String invitedByName) {
+    }
+
+    /** A fresh invite code for a member who has not joined yet; the previous one stops working. */
+    public record InvitationResponse(long memberId, String inviteCode) {
     }
 
     public record MembershipResponse(long groupId, String groupName, long memberId, String displayName) {

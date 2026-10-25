@@ -6,6 +6,8 @@ import dev.splitledger.group.GroupDtos.AddedMemberResponse;
 import dev.splitledger.group.GroupDtos.BankDetailsRequest;
 import dev.splitledger.group.GroupDtos.CreateGroupRequest;
 import dev.splitledger.group.GroupDtos.GroupResponse;
+import dev.splitledger.group.GroupDtos.InvitationPreview;
+import dev.splitledger.group.GroupDtos.InvitationResponse;
 import dev.splitledger.group.GroupDtos.MemberResponse;
 import dev.splitledger.group.GroupDtos.MembershipResponse;
 import dev.splitledger.security.CurrentUser;
@@ -50,8 +52,14 @@ class GroupController {
 
     @PostMapping("/groups/{groupId}/members")
     @ResponseStatus(HttpStatus.CREATED)
-    AddedMemberResponse addMember(@PathVariable long groupId, @Valid @RequestBody AddMemberRequest request) {
-        return groupService.addMember(groupId, request);
+    AddedMemberResponse addMember(@PathVariable long groupId, @AuthenticationPrincipal CurrentUser user,
+                                  @Valid @RequestBody AddMemberRequest request) {
+        return groupService.addMember(groupId, request, user);
+    }
+
+    @PostMapping("/groups/{groupId}/members/{memberId}/invitation")
+    InvitationResponse reissueInvitation(@PathVariable long groupId, @PathVariable long memberId) {
+        return groupService.reissueInvitation(groupId, memberId);
     }
 
     @GetMapping("/groups/{groupId}/members")
@@ -63,6 +71,12 @@ class GroupController {
     MemberResponse updateOwnBankDetails(@PathVariable long groupId, @AuthenticationPrincipal CurrentUser user,
                                         @Valid @RequestBody BankDetailsRequest request) {
         return groupService.updateOwnBankDetails(groupId, user, request);
+    }
+
+    /** Public, like the invite link itself. The code travels in the body, never in a logged URL path. */
+    @PostMapping("/invitations/preview")
+    InvitationPreview previewInvitation(@Valid @RequestBody AcceptInvitationRequest request) {
+        return groupService.previewInvitation(request.code());
     }
 
     @PostMapping("/invitations/accept")

@@ -33,6 +33,10 @@ class SecurityApiTest extends IntegrationTest {
         // The built page is only in the Docker image; here the request must at least not need a token.
         assertThat(anonymous().get().uri("/").exchange().getResponse().getStatus()).isNotEqualTo(401);
         assertThat(anonymous().get().uri("/assets/app.js").exchange().getResponse().getStatus()).isNotEqualTo(401);
+        // What makes the page installable as an app.
+        for (String path : new String[] {"/manifest.webmanifest", "/sw.js", "/icons/icon-192.png"}) {
+            assertThat(anonymous().get().uri(path).exchange().getResponse().getStatus()).as(path).isNotEqualTo(401);
+        }
         assertThat(anonymous().get().uri("/me")).hasStatus(401);
         // A path that tries to climb out of the public folder never reaches a controller: Spring
         // Security's firewall rejects it before any rule is applied.

@@ -51,6 +51,10 @@ class AppRolePrivilegesTest extends IntegrationTest {
             "select id from bank_transaction where group_id = %d for update",
             "update outbox_event set published_at = now() where group_id = %d",
             "select count(*) from correction where group_id = %d",
+            "update app_user set username = username, password_hash = password_hash where id = -%d",
+            "update user_session set revoked_at = now() where id = -%d",
+            "update password_reset set used_at = now() where id = -%d",
+            "update member set joined_at = joined_at, invited_by = invited_by where group_id = %d",
     })
     void appRoleCanDoWhatTheApplicationNeeds(String sql) {
         asAppRole(sql.formatted(groupId));
@@ -70,6 +74,13 @@ class AppRolePrivilegesTest extends IntegrationTest {
             "delete from outbox_event where group_id = %d",
             "update correction set member_id = member_id where group_id = %d",
             "delete from correction where group_id = %d",
+            "update app_user set token_hash = token_hash where id = -%d",
+            "update app_user set created_at = now() where id = -%d",
+            "delete from app_user where id = -%d",
+            "update user_session set token_hash = token_hash, expires_at = now() where id = -%d",
+            "delete from user_session where id = -%d",
+            "update password_reset set code_hash = code_hash where id = -%d",
+            "delete from password_reset where id = -%d",
     })
     void appRoleCannotChangeHistoryOrSchema(String sql) {
         // Spring reports SQLSTATE class 42 as "bad SQL grammar"; PostgreSQL's own message is the root cause.

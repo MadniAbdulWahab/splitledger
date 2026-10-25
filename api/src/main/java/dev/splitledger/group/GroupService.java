@@ -8,6 +8,8 @@ import dev.splitledger.group.GroupDtos.AddMemberRequest;
 import dev.splitledger.group.GroupDtos.AddedMemberResponse;
 import dev.splitledger.group.GroupDtos.BankDetailsRequest;
 import dev.splitledger.group.GroupDtos.GroupResponse;
+import dev.splitledger.group.GroupDtos.InvitationPreview;
+import dev.splitledger.group.GroupDtos.InvitationResponse;
 import dev.splitledger.group.GroupDtos.MemberResponse;
 import dev.splitledger.group.GroupDtos.MembershipResponse;
 import dev.splitledger.security.CurrentUser;
@@ -52,15 +54,15 @@ public class GroupService {
 
     /** Adds a friend as a member and returns a one-time invite code that links their account later. */
     @Transactional
-    public AddedMemberResponse addMember(long groupId, AddMemberRequest request) {
-        requireGroup(groupId);
+    public AddedMemberResponse addMember(long groupId, AddMemberRequest request, CurrentUser inviter) {
+        long inviterId = memberIdOf(groupId, inviter);
         String displayName = request.displayName().strip();
         if (members.existsByGroupIdAndDisplayName(groupId, displayName)) {
             throw new ConflictException("Group " + groupId + " already has a member called '" + displayName + "'");
         }
         String iban = request.iban() == null ? null : Iban.normalize(request.iban());
         String inviteCode = SecretCodes.generate(INVITE_PREFIX);
-        Member member = members.save(Member.invited(groupId, displayName, iban, request.bic(), SecretCodes.hash(inviteCode)));
+        Member member = members.save(Member.invited(groupId, displayName, iban, request.bic(), SecretCodes.hash(inviteCode), inviterId));
         return new AddedMemberResponse(MemberResponse.from(member), inviteCode);
     }
 
@@ -73,10 +75,32 @@ public class GroupService {
         return MemberResponse.from(member);
     }
 
+    /** Public: anyone holding the code may see whose invitation it is, nothing more. */
+    @Transactional(readOnly = true)
+    public InvitationPreview previewInvitation(String code) {
+        Member member = invitedMember(code);
+        String invitedBy = member.getInvitedBy() == null ? null
+                : members.findById(member.getInvitedBy()).map(Member::getDisplayName).orElse(null);
+        return new InvitationPreview(groups.getReferenceById(member.getGroupId()).getName(), member.getDisplayName(), invitedBy);
+    }
+
+    /** Invite codes are stored hashed and cannot be shown again, so "copy the link again" makes a new one. */
+    @Transactional
+    public InvitationResponse reissueInvitation(long groupId, long memberId) {
+        Member member = members.findById(memberId)
+                .filter(m -> m.getGroupId() == groupId)
+                .orElseThrow(() -> new NotFoundException("Member " + memberId + " not found in group " + groupId));
+        if (member.getUserId() != null) {
+            throw new ConflictException(member.getDisplayName() + " has already joined");
+        }
+        String inviteCode = SecretCodes.generate(INVITE_PREFIX);
+        member.replaceInviteCode(SecretCodes.hash(inviteCode));
+        return new InvitationResponse(member.getId(), inviteCode);
+    }
+
     @Transactional
     public MembershipResponse acceptInvitation(String code, CurrentUser user) {
-        Member member = members.findByInviteCodeHash(SecretCodes.hash(code.strip()))
-                .orElseThrow(() -> new NotFoundException("Invitation code is unknown or already used"));
+        Member member = invitedMember(code);
         if (members.existsByGroupIdAndUserId(member.getGroupId(), user.id())) {
             throw new ConflictException("You are already a member of group " + member.getGroupId());
         }
@@ -125,6 +149,11 @@ public class GroupService {
     @Transactional(readOnly = true)
     public Optional<Member> member(long memberId) {
         return members.findById(memberId);
+    }
+
+    private Member invitedMember(String code) {
+        return members.findByInviteCodeHash(SecretCodes.hash(code.strip()))
+                .orElseThrow(() -> new NotFoundException("This invite link is unknown or was already used"));
     }
 
     public void requireGroup(long groupId) {
