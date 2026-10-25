@@ -11,8 +11,8 @@ const ICONS: Partial<Record<ActivityItem['kind'], string>> = {
   PASSWORD_RESET: '🔑', EXPENSE_DELETED: '🗑️',
 };
 
-/** Everything that happened in the group, newest first. Opening it marks the feed as read. */
-export function Activity({ onSeen }: { onSeen: () => void }) {
+/** Everything that happened in the group, newest first; shown in a sheet from the home card. Opening it marks it as read. */
+export function ActivityFeed({ onSeen }: { onSeen: () => void }) {
   const { api, groupId, data, loaded, myMemberId, nameOf, openExpenseDetail } = useGroup();
   const [older, setOlder] = useState<ActivityItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(data.activityCursor);
@@ -34,7 +34,6 @@ export function Activity({ onSeen }: { onSeen: () => void }) {
   const items = [...data.activity, ...older];
   return (
     <>
-      <h1>Activity</h1>
       {!loaded ? <SkeletonRows count={6} /> : items.length === 0
         ? <div className="list"><Empty emoji="🕊️" title="Nothing yet" text="Expenses, payments and new members show up here." /></div>
         : (

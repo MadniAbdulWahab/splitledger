@@ -13,6 +13,7 @@ describe('parseHash', () => {
     expect(parseHash('#/g/12/insights')).toEqual({ kind: 'group', groupId: 12, screen: 'insights' });
     expect(parseHash('#/g/12')).toEqual({ kind: 'group', groupId: 12, screen: 'home' });
     expect(parseHash('#/g/12/nonsense')).toEqual({ kind: 'group', groupId: 12, screen: 'home' });
+    expect(parseHash('#/g/12/expenses')).toEqual({ kind: 'group', groupId: 12, screen: 'activity' });
   });
 
   it('ignores anything else', () => {

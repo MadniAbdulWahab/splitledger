@@ -5,7 +5,8 @@ import { Icon } from '../ui/Icon';
 import { Avatar, CategoryTile, Empty, Guilloche, Money, SkeletonRows } from '../ui/parts';
 import { useGroup } from './context';
 
-export function Home({ banners }: { banners?: ReactNode }) {
+/** {@code unread}: feed entries by others since you last opened it; the card opens the feed. */
+export function Home({ banners, unread, onOpenFeed }: { banners?: ReactNode; unread: number; onOpenFeed: () => void }) {
   const { groupName, data, loaded, myMemberId, openExpense, openSettle, go } = useGroup();
   const myBalance = data.balances.find((b) => b.memberId === myMemberId)?.balanceCents ?? 0;
   const owesMe = data.debts.filter((d) => d.toMemberId === myMemberId);
@@ -20,7 +21,10 @@ export function Home({ banners }: { banners?: ReactNode }) {
 
   return (
     <>
-      <section className="group-card" aria-label="Your balance">
+      {/* Green when you get money back, red when you owe, purple when settled. */}
+      <section className={`group-card clickable ${myBalance > 0 ? 'owed' : myBalance < 0 ? 'owe' : ''}`}
+        role="button" tabIndex={0} aria-label="Your balance; show what happened in the group"
+        onClick={onOpenFeed} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenFeed(); } }}>
         <Guilloche />
         <div className="card-top"><span className="card-name">{groupName}</span><span className="card-chip" aria-hidden="true" /></div>
         <div>
@@ -34,6 +38,9 @@ export function Home({ banners }: { banners?: ReactNode }) {
             <span className="avatar-stack">{people.slice(0, 4).map((p) => <Avatar key={p.id} id={p.id} name={p.name} size="small" />)}</span>
           )}
           <span>{loaded ? cardLine : ''}</span>
+          {unread > 0
+            ? <span className="card-new">{unread} new</span>
+            : <span className="card-more" aria-hidden="true">›</span>}
         </div>
       </section>
 
@@ -60,7 +67,7 @@ export function Home({ banners }: { banners?: ReactNode }) {
       <section className="section">
         <div className="section-head">
           <h2>Latest</h2>
-          {data.latest.length > 0 && <button type="button" className="btn btn-link" onClick={() => go('expenses')}>See all</button>}
+          {data.latest.length > 0 && <button type="button" className="btn btn-link" onClick={() => go('activity')}>See all</button>}
         </div>
         {!loaded ? <SkeletonRows /> : data.latest.length === 0
           ? <div className="list"><Empty emoji="🧾" title="No expenses yet" text="Add the first one, or import your bank statement and share payments from it."

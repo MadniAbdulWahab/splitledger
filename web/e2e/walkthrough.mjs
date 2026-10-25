@@ -137,11 +137,15 @@ async function walkthrough(name, options) {
 
   // Ben sees what Anna did in his activity feed, with a dot on the tab first.
   await ben.page.reload();
-  await ben.page.locator('.nav-dot').filter({ visible: true }).first().waitFor();
-  await ben.page.getByRole('link', { name: /^Activity/ }).click(); // "Activity, 2 new"
+  // The home card says what is new and opens the feed.
+  await ben.page.locator('.group-card .card-new').waitFor();
+  await ben.page.locator('.group-card.clickable').click();
+  await ben.page.getByRole('heading', { name: 'What happened' }).waitFor();
   await ben.page.getByText('Anna Beispiel added REWE').waitFor();
   await ben.page.getByText('You joined').waitFor();
   await ben.shot('07-activity');
+  await ben.page.getByRole('button', { name: 'Close' }).click();
+  await ben.page.locator('.group-card .card-new').waitFor({ state: 'detached' });
 
   // Settling up: the GiroCode for Ben to scan, then Anna marks the money as received.
   await person('Ben').click();
@@ -169,10 +173,9 @@ async function walkthrough(name, options) {
   await page.getByRole('button', { name: /^Share\s54,12/ }).click();
   await toast('Shared “EDEKA Center Bonn” with the group');
 
-  // History lists everything; search with a typo narrows it, clearing brings it back.
-  await nav(phone ? 'Home' : 'History');
-  if (phone) await page.getByRole('button', { name: 'See all' }).click();
-  await page.getByRole('heading', { name: 'History' }).waitFor();
+  // Activity lists every expense; search with a typo narrows it, clearing brings it back.
+  await nav('Activity');
+  await page.getByRole('heading', { name: 'Activity' }).waitFor();
   const rows = page.locator('.main .list li');
   await rows.filter({ hasText: 'REWE' }).waitFor(); // past the loading placeholders
   check(await rows.count() === 3, `history lists all three expenses without a search: ${await rows.allInnerTexts()}`);
@@ -226,8 +229,7 @@ async function walkthrough(name, options) {
 
   // Corrections: undo Ben's payment, delete the train, edit EDEKA down to 50,00. Nothing
   // disappears; the old entries stay crossed out with who changed them.
-  await nav(phone ? 'Home' : 'History');
-  if (phone) await page.getByRole('button', { name: 'See all' }).click();
+  await nav('Activity');
   await page.getByRole('button', { name: /^Payments/ }).click();
   await page.locator('.main .list li', { hasText: 'Ben paid you' }).getByRole('button', { name: 'Undo' }).click();
   await toast('Payment undone');
@@ -262,7 +264,7 @@ async function walkthrough(name, options) {
   await ben.page.getByLabel('Username').fill(`ben-${name}-${run}`);
   await ben.page.getByLabel('Password').fill('ben password');
   await ben.page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  // Back where he was (Activity); Home shows his balance.
+  // Back where he was; Home shows his balance.
   await ben.page.getByRole('link', { name: 'Home', exact: true }).click();
   await ben.page.locator('.group-card .card-name').waitFor();
   await shows(ben.page.locator('.group-card'), '87,00', 'Ben signed in again and owes 87,00');

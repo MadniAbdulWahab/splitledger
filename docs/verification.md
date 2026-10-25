@@ -545,3 +545,16 @@ leave" right after the tap, which hid it).
 against the local API: tapping October shows "October 2026, Group 25,00 €, you 12,50 €" inside the
 card, and the page is not wider than the screen. The iOS-specific parts (status-bar blur,
 rubber-band) need a look on the iPhone after deploying.
+
+## 2026-10-26: Activity is the history, card colours, scrollable sheets
+
+The "Activity" tab now shows the history (search, category filter, payments, edit and delete); the
+feed of who did what opens from the home card, which shows "N new" for entries by others since the
+last look. Old `#/g/…/expenses` links land on Activity. The card is green when you get money back,
+red when you owe, purple when settled. Sheets scroll as a whole (the backdrop is the scroll area),
+iOS date fields look like the other inputs, and the add button is a raised rounded square again.
+
+`web`: type check OK, 65 unit tests passed, build OK. Checked in Chrome at 390×844 (touch, dark)
+against the local API: both card colours, the add sheet scrolled to its end with the date field and
+button reachable, the feed sheet from the card. The walkthrough (`web/e2e`) was updated for the new
+names and runs in CI.

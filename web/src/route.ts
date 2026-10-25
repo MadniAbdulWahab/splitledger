@@ -10,7 +10,7 @@ import { useCallback, useEffect, useState } from 'react';
 // Invite and reset codes live in the fragment on purpose: browsers never send it to the server,
 // so the codes never appear in request logs.
 
-export const SCREENS = ['home', 'expenses', 'activity', 'insights', 'bank', 'group'] as const;
+export const SCREENS = ['home', 'activity', 'insights', 'bank', 'group'] as const;
 export type Screen = typeof SCREENS[number];
 
 export type Route =
@@ -27,7 +27,9 @@ export function parseHash(hash: string): Route {
   }
   const group = /^\/g\/(\d+)(?:\/([a-z]+))?$/.exec(value);
   if (group) {
-    const screen = SCREENS.find((s) => s === group[2]) ?? 'home';
+    // "expenses" was the history's old name; links and bookmarks to it still land there.
+    const name = group[2] === 'expenses' ? 'activity' : group[2];
+    const screen = SCREENS.find((s) => s === name) ?? 'home';
     return { kind: 'group', groupId: Number(group[1]), screen };
   }
   return { kind: 'none' };

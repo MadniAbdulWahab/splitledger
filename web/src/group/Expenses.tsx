@@ -108,7 +108,7 @@ function ExpensesHead({ view, onView }: { view: 'expenses' | 'payments'; onView:
   const { data } = useGroup();
   return (
     <div className="section-head" style={{ alignItems: 'center', padding: 0 }}>
-      <h1>History</h1>
+      <h1>Activity</h1>
       <div className="segmented" role="group" aria-label="Show" style={{ width: 220 }}>
         <button type="button" aria-pressed={view === 'expenses'} onClick={() => onView('expenses')}>Expenses</button>
         <button type="button" aria-pressed={view === 'payments'} onClick={() => onView('payments')}>

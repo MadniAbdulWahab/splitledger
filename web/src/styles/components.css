@@ -25,6 +25,14 @@
 .group-card .card-sub { color: var(--card-muted); }
 .group-card .card-bottom { display: flex; align-items: center; gap: 10px; color: var(--card-muted); font-size: 14px; min-height: 30px; }
 .group-card .avatar { border: 2px solid var(--card); }
+/* The card's colour says where you stand at a glance; the text says it in words. */
+.group-card.owed { --card: #0e4a39; --card-line: #4fd3a0; --card-muted: #bde8d5; }
+.group-card.owe { --card: #5c1830; --card-line: #ff8aa1; --card-muted: #f4c6d1; }
+.group-card.clickable { cursor: pointer; transition: transform 100ms ease; }
+.group-card.clickable:active { transform: scale(0.99); }
+.group-card .card-new, .group-card .card-more { margin-left: auto; }
+.group-card .card-new { padding: 2px 10px; border-radius: 999px; background: var(--card-ink); color: var(--card); font-weight: 700; font-size: 12px; }
+.group-card .card-more { font-size: 22px; line-height: 1; color: var(--card-muted); }
 
 /* ---------- Quick actions under the card ---------- */
 .quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -135,14 +143,20 @@ details.more summary { cursor: pointer; color: var(--giro); font-weight: 600; li
 details.more summary::-webkit-details-marker { display: none; }
 
 /* ---------- Sheets: bottom sheet on phones, dialog on wide screens ---------- */
+/*
+ * The dimmed backdrop is the scrolling area, not the sheet: on an iPhone the bottom of a sheet can sit
+ * behind Safari's toolbar, where a sheet with its own scroll area could not be scrolled to its end.
+ */
 .sheet-backdrop {
   position: fixed; inset: 0; z-index: 40; background: rgb(15 16 32 / 45%);
-  display: flex; align-items: flex-end; justify-content: center; animation: fade 160ms ease;
+  overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; align-items: center;
+  padding-top: calc(24px + env(safe-area-inset-top)); animation: fade 160ms ease;
 }
 .sheet {
-  width: 100%; max-width: 560px; max-height: 92dvh; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
+  margin-top: auto; flex: none; width: 100%; max-width: 560px; overflow-x: hidden;
   background: var(--surface); border-radius: 24px 24px 0 0; box-shadow: var(--shadow-sheet);
-  padding: 8px 20px calc(24px + env(safe-area-inset-bottom)); animation: rise 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  padding: 8px 20px calc(48px + env(safe-area-inset-bottom)); animation: rise 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .sheet-handle { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 4px auto 12px; }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
@@ -150,8 +164,8 @@ details.more summary::-webkit-details-marker { display: none; }
 @keyframes rise { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes fade { from { opacity: 0; } }
 @media (min-width: 640px) {
-  .sheet-backdrop { align-items: center; padding: 24px; }
-  .sheet { border-radius: 24px; padding: 20px 28px 28px; }
+  .sheet-backdrop { padding: 24px; }
+  .sheet { margin: auto 0; border-radius: 24px; padding: 20px 28px 28px; }
   .sheet-handle { display: none; }
 }
 

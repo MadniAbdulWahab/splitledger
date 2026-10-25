@@ -7,7 +7,7 @@ import { Icon, type IconName } from '../ui/Icon';
 import { Avatar, GroupMark, Sheet } from '../ui/parts';
 import { useToast } from '../ui/toast';
 import { AccountSheet } from './AccountSheet';
-import { Activity } from './Activity';
+import { ActivityFeed } from './Activity';
 import { Bank } from './Bank';
 import { GroupProvider, useGroupData, type Draft, type GroupContextValue } from './context';
 import { ExpenseSheet } from './ExpenseSheet';
@@ -23,12 +23,12 @@ type SheetState =
   | { kind: 'settle'; debt?: SuggestedPayment }
   | { kind: 'groups' }
   | { kind: 'account' }
+  | { kind: 'feed' }
   | null;
 
 const SIDE_NAV: { screen: Screen; label: string; icon: IconName }[] = [
   { screen: 'home', label: 'Home', icon: 'home' },
-  { screen: 'expenses', label: 'History', icon: 'receipt' },
-  { screen: 'activity', label: 'Activity', icon: 'activity' },
+  { screen: 'activity', label: 'Activity', icon: 'receipt' },
   { screen: 'insights', label: 'Insights', icon: 'insights' },
   { screen: 'bank', label: 'Bank import', icon: 'bank' },
   { screen: 'group', label: 'Group', icon: 'group' },
@@ -127,7 +127,7 @@ function GroupApp({ api, me, groupId, groupName, myMemberId, screen, navigate, o
       setSeen(newest);
     }
   }, [data.activity, groupId, seen]);
-  const unread = screen === 'activity' ? 0 : unreadCount(data.activity, seen, myMemberId);
+  const unread = unreadCount(data.activity, seen, myMemberId);
   const myName = me.groups.find((g) => g.groupId === groupId)?.displayName ?? me.displayName;
 
   const banners: ReactNode = (
@@ -154,7 +154,6 @@ function GroupApp({ api, me, groupId, groupName, myMemberId, screen, navigate, o
     <a key={s} href={groupHref(groupId, s)} className={className} aria-current={screen === s ? 'page' : undefined}>
       <Icon name={icon} />
       <span>{label}</span>
-      {s === 'activity' && unread > 0 && <span className="nav-dot" aria-label={`${unread} new`} />}
       {s === 'bank' && data.candidates.length > 0 && className !== 'nav-item' && <span className="pill quiet">{data.candidates.length}</span>}
     </a>
   );
@@ -186,9 +185,8 @@ function GroupApp({ api, me, groupId, groupName, myMemberId, screen, navigate, o
         </header>
 
         <main className="main">
-          {screen === 'home' && <Home banners={banners} />}
-          {screen === 'expenses' && <Expenses />}
-          {screen === 'activity' && <Activity onSeen={markSeen} />}
+          {screen === 'home' && <Home banners={banners} unread={unread} onOpenFeed={() => setSheet({ kind: 'feed' })} />}
+          {screen === 'activity' && <Expenses />}
           {screen === 'insights' && <Insights />}
           {screen === 'bank' && <Bank />}
           {screen === 'group' && <GroupPage />}
@@ -198,7 +196,7 @@ function GroupApp({ api, me, groupId, groupName, myMemberId, screen, navigate, o
 
         <nav className="bottom-nav" aria-label="Group">
           {navLink('home', 'Home', 'home', 'nav-item')}
-          {navLink('activity', 'Activity', 'activity', 'nav-item')}
+          {navLink('activity', 'Activity', 'receipt', 'nav-item')}
           <button type="button" className="fab" aria-label="Add expense" onClick={() => setSheet({ kind: 'expense', draft: { kind: 'new' } })}>
             <Icon name="plus" />
           </button>
@@ -210,6 +208,7 @@ function GroupApp({ api, me, groupId, groupName, myMemberId, screen, navigate, o
       {sheet?.kind === 'expense' && <ExpenseSheet draft={sheet.draft} onClose={closeSheet} />}
       {sheet?.kind === 'detail' && <ExpenseDetail expenseId={sheet.expenseId} onClose={closeSheet} />}
       {sheet?.kind === 'settle' && <SettleSheet initial={sheet.debt} onClose={closeSheet} />}
+      {sheet?.kind === 'feed' && <Sheet title="What happened" onClose={closeSheet}><ActivityFeed onSeen={markSeen} /></Sheet>}
       {sheet?.kind === 'groups' && (
         <GroupsSheet api={api} me={me} current={groupId} onClose={closeSheet}
           onPick={(id) => { closeSheet(); navigate(groupHref(id)); }}
