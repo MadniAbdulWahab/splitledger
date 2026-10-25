@@ -466,3 +466,50 @@ http://splitledger-madni.duckdns.org/             308 -> https://…
 https://splitledger-madni.duckdns.org/actuator/health   404 (kept internal)
 certificate: issuer Let's Encrypt (YE1), valid until 2027-01-20
 ```
+
+## 2026-10-25: accounts for friends, categories, insights, activity, redesigned installable web app
+
+Commits `754723a` (passwords, sessions, invite links, password resets), `ef45545` (categories,
+`created_by`, insights, activity feed) and `e03e38f` (redesigned, installable web app).
+
+**Tests, local, Windows 11 with Docker Desktop:**
+
+```
+api              ./mvnw verify          199 tests, 0 failures, 0 errors   (one run)
+statement-worker ./mvnw clean verify     13 tests, 0 failures, 0 errors
+web              npm test                62 tests passed; npm run build: type check and bundle OK
+```
+
+New API tests: `PasswordLoginApiTest` (sign-in on a second device, same answer for unknown user
+and wrong password, lock after five wrong passwords, sign out one device or all, expiry, API-token
+accounts moving to a password, password change signs out other devices, username and password
+rules), `InviteLinkApiTest` (preview, sign-up through the link without the registration code,
+single use, a failed sign-up leaves no account, a new link replaces the old), `PasswordResetApiTest`
+(one-time link, expiry, only groupmates, accounts without username), `ExpenseCategoryApiTest`,
+`InsightsApiTest` (window, my share, deleted and edited expenses left out), `ActivityApiTest`
+(every kind in order with who did it, pages without gaps or repeats, strangers get 403), plus new
+grants in `AppRolePrivilegesTest`, a category filter in the `SearchIndexUsageTest` EXPLAIN check,
+and the new endpoints in the stranger check of `SecurityApiTest`.
+
+Earlier the same day the machine ran out of memory while the IDE, Docker and the tests ran
+together (`hs_err`: "insufficient memory"); those runs crashed test JVMs, not tests. After memory
+was freed the suite above ran in one go.
+
+**Browser walkthrough** (`web/e2e/walkthrough.mjs`, rewritten for two people in two browser
+contexts) against `docker compose up --build`, desktop light and phone dark: Anna starts a group
+with a username and password, invites Ben, Ben opens the `#join=` link, picks a password and is in
+the group; REWE suggests groceries; equal and exact splits; Ben sees Anna's expenses in his
+activity feed with an unread dot; GiroCode and "mark as received"; bank import and sharing EDEKA;
+typo search and the category filter; Lucy, undo, delete and edit end at "Ben owes you 87,00";
+insights; Ben signs out and back in with his password.
+
+```
+Walkthrough passed: desktop and phone, two friends each
+```
+
+The same build serves the installable-app files: `GET /manifest.webmanifest` 200
+`application/manifest+json`, `/sw.js` 200 `text/javascript`, `/icons/icon-192.png` 200
+`image/png`. Screenshots from the run: `docs/evidence/2026-10-25-*.png`.
+
+Not yet done: deploying this to the free host (`git pull && docker compose up -d --build` in
+`deploy/free-host`; Flyway applies V10 and V11 on start) and installing it on a real phone.

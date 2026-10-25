@@ -19,8 +19,19 @@ SplitLedger is a small ledger service for one group of friends that fixes exactl
    ("Pizerria") and filters, on PostgreSQL full-text and trigram indexes.
 4. **Settle with a scan.** "You owe Lucy 10,00 €" comes with a GiroCode (EPC QR) that German
    banking apps scan; recording the payment updates the ledger.
+5. **Join with a link.** A friend opens the invite link from WhatsApp, picks a username and a
+   password and is in the group; a forgotten password is fixed with a reset link from a groupmate.
+6. **See where the money goes.** Categories (suggested from the payee: "REWE" is groceries),
+   monthly insights with your own share, and an activity feed of who added, paid or changed what.
 
-Friends use it through a small web page (desktop and phone) served by the same service.
+Friends use it as a web app on their phones (installable to the home screen) or on a laptop,
+served by the same service.
+
+<p>
+  <img src="docs/evidence/2026-10-25-phone-home.png" alt="Home on a phone: the group card with your balance, quick actions, people and the latest expenses" width="250">
+  <img src="docs/evidence/2026-10-25-phone-invite-link.png" alt="Opening an invite link: Anna invited you to WG Kessenich, choose a username and password" width="250">
+  <img src="docs/evidence/2026-10-25-phone-settle-up.png" alt="Settling up with a GiroCode to scan in a banking app" width="250">
+</p>
 
 It is a personal project for a group of friends, not a payment service: no money is moved and no
 bank API is called. Deployed and verified on AWS; the stack is torn down between demos.
@@ -58,8 +69,8 @@ dated evidence of what ran is in [docs/verification.md](docs/verification.md).
 | Service | Java 21, Spring Boot 4.1, Spring Security (API tokens), Spring Data JPA, Flyway, springdoc-openapi |
 | Worker | Kotlin 2.4, kotlinx.serialization, AWS Lambda (java21, arm64), AWS SDK v2 |
 | Data | PostgreSQL 16: `tsvector` + GIN, `pg_trgm`, triggers, row locks, partial unique indexes |
-| Web page | React 19, TypeScript, Vite; served by Spring Boot from the same origin, strict Content-Security-Policy |
-| Tests | JUnit, Testcontainers (PostgreSQL, ElasticMQ for SQS, S3Mock), concurrency tests, Vitest, a Playwright browser walkthrough in CI; 157 API + 13 worker + 27 web tests |
+| Web app | React 19, TypeScript, Vite, no UI or chart library; installable (manifest, service worker that never caches API data); served by Spring Boot from the same origin, strict Content-Security-Policy |
+| Tests | JUnit, Testcontainers (PostgreSQL, ElasticMQ for SQS, S3Mock), concurrency tests, Vitest, a Playwright browser walkthrough in CI; 199 API + 13 worker + 62 web tests |
 | Infrastructure | Terraform 1.16, AWS provider 6: VPC, RDS, ECR, ECS Fargate, SQS, Lambda, S3, SSM, IAM, CloudWatch, SNS, Budgets |
 | Delivery | GitHub Actions (CI on every push, deploy via OIDC), Docker multi-stage image, non-root |
 
@@ -73,8 +84,9 @@ docker compose up --build     # API on http://localhost:8080, PostgreSQL on 127.
 scripts/demo.sh               # the whole story: two friends, imports, settle-up, verify, search
 ```
 
-The web page is at http://localhost:8080. Interactive API docs: http://localhost:8080/swagger-ui.html (register with `POST /users`, then use
-the token with "Authorize"). Tests: `cd api && ./mvnw verify`.
+The web app is at http://localhost:8080: "Start a new group" creates your account, then invite
+friends from the Group page. Interactive API docs: http://localhost:8080/swagger-ui.html (register
+with `POST /users`, then use the token with "Authorize"). Tests: `cd api && ./mvnw verify`.
 
 ## Deploy to AWS
 

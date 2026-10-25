@@ -485,3 +485,73 @@ partly shared, paid on behalf of someone, or belong to another day, so Share now
 filled with the bank's name, amount and date. The confirmation endpoint accepts payer, amount and
 date and falls back to the bank's values when they are missing, so older clients keep working. The
 bank purpose text is still attached to the expense and stays searchable.
+
+## 36. Passwords and sessions next to API tokens (2026-10-25)
+
+Friends had to keep an `slt_` token shown once in a password manager and paste it on every device;
+nobody would. People now sign in with a username and a password. The password is hashed with
+bcrypt (from spring-security-crypto, already on the classpath): unlike a 256-bit random token, a
+password has little randomness, so every guess has to be slow. bcrypt reads only 72 bytes, so
+longer passwords are refused instead of silently cut. Unknown usernames are compared against a
+dummy hash, so the answer takes as long as for a wrong password; five wrong passwords in a row lock
+a username for a minute (in memory, enough for one API instance).
+
+Every sign-in creates a row in `user_session` with its own token (same `slt_` format, stored as
+SHA-256), valid 180 days and revocable: "sign out" revokes this device, "sign out everywhere" all
+of them, a password change all others. The old API tokens keep working for scripts and existing
+accounts, which can add a username and password later. The application role may update only
+`app_user (username, password_hash)`, `user_session (revoked_at)` and `password_reset (used_at)`;
+the token hash and creation time of an account stay immutable.
+
+## 37. The invite link is the permission (2026-10-25)
+
+Joining needed the host's registration code plus an invite code. Now adding a friend gives a link
+`https://host/#join=inv_…`. Opening it shows "Anna invited you to WG Kessenich"; the friend picks a
+username and password and is in the group, in one transaction (an unknown code or a taken username
+leaves nothing behind). The invite code already proves that a member invited this person, so the
+registration code is only needed to start a new group. Codes live in the URL fragment, which
+browsers never send to the server, and in request bodies, never in paths, because the request log
+records paths. A lost link is replaced by a new one, which invalidates the old (codes are stored
+hashed and cannot be shown again).
+
+## 38. Password resets by a groupmate, shown to everyone (2026-10-25)
+
+There is no email server, so "forgot password" works through the group: any member can create a
+one-time link (`#reset=rst_…`, 24 hours) for a friend who has joined. Using it sets the new
+password, signs out every device and signs the friend in. A groupmate could use the link
+themselves to take over the account, so every reset appears in the group's activity feed with who
+made it, and the owner notices because all their devices are signed out. For a group of friends
+that is the right trade; a public service would need email or a second factor.
+
+## 39. Categories and "who added it" (2026-10-25)
+
+Expenses get an optional category from a fixed list (groceries, rent, travel, …). The page suggests
+one from the description or bank payee ("REWE" is groceries, "DB" transport) with whole-word
+keyword rules, and the user can change it. Old expenses have none and count as Other. The category
+joins the idempotency hash only when it is set, so the hash of a request without one is unchanged.
+Expenses and payments also record the member who entered them (`created_by`), which is not
+always the payer. Both are new columns written on insert; the rows stay immutable.
+
+## 40. Activity feed and insights read the append-only tables (2026-10-25)
+
+The activity feed is one `UNION ALL` over expenses, corrections, payments, members and password
+resets, newest first with keyset pagination on (time, id). Nothing new is written for it, so it
+cannot disagree with the ledger. Corrections and resets now take their timestamp from the
+application clock like every other row; the database container's clock can be a few milliseconds
+off and would shuffle the order. Insights sum live expenses (no reversing entries) per month,
+category and payer in SQL; "your share" is what you consumed, not what you paid. Bank transactions
+never appear in either: they stay private to their owner.
+
+## 41. A redesigned page that installs as an app (2026-10-25)
+
+The page was rebuilt around how friends use it on phones: a group card with your balance, quick
+actions, people with what is open, a bottom bar with a raised add button, bottom sheets for adding
+and settling, and a sidebar layout on wide screens. Still no UI library, router or chart library:
+a hash router (`#/g/12/insights`), CSS tokens with light, dark and a manual theme switch, inline
+SVG icons and charts. Member colours come from the euro banknotes and follow the member id; chart
+colours were checked for colour-vision deficiencies and contrast in both themes.
+
+A web app manifest and a service worker make it installable ("Add to Home Screen"). The service
+worker caches only the app shell (page, hashed scripts and styles, icons): API responses, and with
+them balances, bank data and tokens, never enter the browser cache, and the page itself is fetched
+network-first so a new deployment shows at once.
