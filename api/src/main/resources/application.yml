@@ -35,6 +35,10 @@ management:
         enabled: true
 
 server:
+  # Behind Caddy (free host) the client's address comes from X-Forwarded-For. Tomcat accepts the
+  # header only from proxies in private networks, so a client cannot fake its address; the sign-up
+  # limit per network depends on it.
+  forward-headers-strategy: native
   # The web app's manifest (installing it on a phone) has its own media type.
   mime-mappings:
     webmanifest: application/manifest+json

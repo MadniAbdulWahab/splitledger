@@ -3,8 +3,9 @@
 //   npm run e2e -- http://localhost:8080
 //   REGISTRATION_CODE=... SCREENSHOTS=shots npm run e2e -- https://splitledger.example.org
 //
-// Runs the friends' main path twice (desktop light, phone dark), with two people in two browser
-// contexts: Anna starts a group and sends Ben an invite link; Ben opens it and picks a password.
+// Runs the friends' main path twice (desktop light, phone dark), with three people in their own browser
+// contexts: Anna starts a group and sends Ben an invite link; Ben opens it and picks a password;
+// Lucy signs up on her own and joins by pasting her link.
 // Fails on any wrong state or any JavaScript error in the browser. Uses the installed Chrome
 // (playwright-core, no download).
 import { chromium } from 'playwright-core';
@@ -61,7 +62,7 @@ async function walkthrough(name, options) {
   await shot('01-sign-in');
 
   // Anna starts a group: account with username and password (plus the host code if one is set).
-  await page.getByRole('button', { name: 'Start a new group' }).click();
+  await page.getByRole('button', { name: 'Create an account' }).click();
   await page.getByLabel('Your name').fill('Anna Beispiel');
   await page.getByLabel('Username').fill(`anna-${name}-${run}`);
   await page.getByLabel('Password').fill('anna password');
@@ -192,8 +193,25 @@ async function walkthrough(name, options) {
   await nav('Group');
   await page.getByLabel("Friend's name").fill('Lucy');
   await page.getByRole('button', { name: 'Invite' }).click();
-  await page.getByLabel('Link').waitFor();
+  const lucyLink = await page.getByLabel('Link').inputValue();
   await page.getByRole('button', { name: 'Close' }).click();
+
+  // Lucy signs up on her own, without any code, and joins by pasting the link Anna sent her.
+  const lucy = await open(`${name}-lucy`, options);
+  await lucy.page.goto(base);
+  await lucy.page.getByRole('button', { name: 'Create an account' }).click();
+  check(code !== '' || await lucy.page.getByLabel('Host code').count() === 0, 'open sign-up asks for no host code');
+  await lucy.page.getByLabel('Your name').fill('Lucy');
+  await lucy.page.getByLabel('Username').fill(`lucy-${name}-${run}`);
+  await lucy.page.getByLabel('Password').fill('lucy password');
+  if (code) await lucy.page.getByLabel('Host code').fill(code);
+  await lucy.page.getByRole('button', { name: 'Create account' }).click();
+  await lucy.page.getByRole('heading', { name: 'Join a group' }).waitFor();
+  await lucy.shot('11a-no-group');
+  await lucy.page.getByLabel('Invite link or code').fill(lucyLink);
+  await lucy.page.getByRole('button', { name: 'Join', exact: true }).click();
+  await lucy.page.locator('.group-card .card-name', { hasText: 'WG Kessenich' }).waitFor();
+  await lucy.context.close();
   await addExpense();
   await page.getByLabel('Amount in euros').fill('20,00');
   await page.getByLabel('What for?').fill('Train');
@@ -269,4 +287,4 @@ if (problems.length > 0) {
   console.error(`Browser errors:\n${problems.join('\n')}`);
   process.exit(1);
 }
-console.log('Walkthrough passed: desktop and phone, two friends each');
+console.log('Walkthrough passed: desktop and phone, three friends each');

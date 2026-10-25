@@ -33,6 +33,12 @@ export function parseHash(hash: string): Route {
   return { kind: 'none' };
 }
 
+/** The invite code from what someone pasted: the whole link, or just "inv_…". Null if neither. */
+export function inviteCodeFrom(text: string): string | null {
+  const match = /(?:^|#join=)(inv_[\w-]+)\s*$/.exec(text.trim());
+  return match ? match[1]! : null;
+}
+
 export function groupHref(groupId: number, screen: Screen = 'home'): string {
   return `#/g/${groupId}/${screen}`;
 }

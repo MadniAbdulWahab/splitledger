@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { unreadCount } from '../activity';
 import { ApiError, type Api, type Me, type SuggestedPayment } from '../api';
 import { useInstall } from '../install';
-import { groupHref, type Route, type Screen } from '../route';
+import { groupHref, inviteCodeFrom, type Route, type Screen } from '../route';
 import { Icon, type IconName } from '../ui/Icon';
 import { Avatar, GroupMark, Sheet } from '../ui/parts';
 import { useToast } from '../ui/toast';
@@ -246,6 +246,36 @@ function NewGroupForm({ api, onCreated }: { api: Api; onCreated: (groupId: numbe
   );
 }
 
+/** Joining a friend's group without opening their link: paste the link or the code. */
+function JoinGroupForm({ api, onJoined }: { api: Api; onJoined: (groupId: number) => void }) {
+  const toast = useToast();
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const code = inviteCodeFrom(text);
+    if (!code) {
+      toast('Paste the invite link your friend sent, or the code in it (starts with inv_).', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      onJoined((await api.acceptInvitation(code)).groupId);
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', gap: 8 }}>
+      <input aria-label="Invite link or code" placeholder="Paste the invite link or code" value={text}
+        onChange={(e) => setText(e.target.value)} required autoComplete="off" spellCheck={false} />
+      <button className="btn btn-primary" disabled={busy}>Join</button>
+    </form>
+  );
+}
+
 function GroupsSheet({ api, me, current, onPick, onCreated, onClose }: {
   api: Api; me: Me; current: number; onPick: (id: number) => void; onCreated: (id: number) => void; onClose: () => void;
 }) {
@@ -263,9 +293,10 @@ function GroupsSheet({ api, me, current, onPick, onCreated, onClose }: {
             </li>
           ))}
         </ul>
+        <h3>Join a group</h3>
+        <JoinGroupForm api={api} onJoined={onCreated} />
         <h3>New group</h3>
         <NewGroupForm api={api} onCreated={onCreated} />
-        <p className="hint">To join a friend’s group, open the invite link they sent you.</p>
       </div>
     </Sheet>
   );
@@ -278,9 +309,12 @@ function NoGroup({ api, me, onCreated, onSignOut }: { api: Api; me: Me; onCreate
         <span className="auth-brand"><img className="brand-icon" src="/icons/icon.svg" alt="" />SplitLedger</span>
         <div className="auth-panel">
           <h1>Welcome, {me.displayName}</h1>
-          <p className="muted">Start a group for your flat or your next trip. Then invite your friends with a link.</p>
+          <h2>Join a group</h2>
+          <p className="muted small">Got an invite from a friend? Paste their link or code.</p>
+          <JoinGroupForm api={api} onJoined={onCreated} />
+          <h2>Or start one</h2>
+          <p className="muted small">For your flat or your next trip; then invite your friends with a link.</p>
           <NewGroupForm api={api} onCreated={onCreated} />
-          <p className="hint">Waiting to join a friend’s group? Open the invite link they sent you.</p>
         </div>
         <div className="auth-alt"><button type="button" className="btn btn-link" onClick={() => onSignOut(false)}>Sign out</button></div>
       </div>

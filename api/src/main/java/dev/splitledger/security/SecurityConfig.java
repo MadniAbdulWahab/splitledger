@@ -46,7 +46,7 @@ class SecurityConfig {
                         // The web page itself is public; everything it does goes through the API with a token.
                         // manifest, service worker and icons make it installable as an app.
                         .requestMatchers(HttpMethod.GET, "/", "/index.html", "/assets/**", "/favicon.svg", "/favicon.ico",
-                                "/manifest.webmanifest", "/sw.js", "/icons/**").permitAll()
+                                "/manifest.webmanifest", "/sw.js", "/icons/**", "/users/registration").permitAll()
                         .requestMatchers("/groups/{groupId}", "/groups/{groupId}/**").access(groupMembership)
                         .anyRequest().authenticated())
                 .exceptionHandling(errors -> errors

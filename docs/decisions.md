@@ -555,3 +555,17 @@ A web app manifest and a service worker make it installable ("Add to Home Screen
 worker caches only the app shell (page, hashed scripts and styles, icons): API responses, and with
 them balances, bank data and tokens, never enter the browser cache, and the page itself is fetched
 network-first so a new deployment shows at once.
+
+## 42. Open sign-up with a limit per network (2026-10-25)
+
+A registration code kept strangers out, but it also meant friends needed a code from the host before
+they could do anything, unlike every app they know. Now anyone can create an account and then start
+a group or join one by pasting an invite link or code (`POST /invitations/accept` existed already;
+the page only lacked the field). Strangers gain nothing from an account: every group is visible to
+its members only. What remains is junk: bots filling the small free VM with accounts. So one
+network may create at most five accounts per hour (`splitledger.signup-limit-per-hour`), counting
+only accounts actually created, so a taken username costs nothing; invite sign-ups count as well.
+Behind Caddy the client's address comes from `X-Forwarded-For`, which Tomcat accepts only from
+proxies in private networks (`server.forward-headers-strategy: native`), so a client cannot fake its
+address by sending the header. The registration code stays available: when it is set, sign-up needs
+it again and the page shows the field (`GET /users/registration`).

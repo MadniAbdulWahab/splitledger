@@ -31,6 +31,9 @@ services:
       SPRING_FLYWAY_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env (see .env.example)}
       DB_USER: splitledger_app
       DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env (see .env.example)}
+      # Locally every account comes from the same address; the browser walkthrough alone creates
+      # six. A public host keeps the default of 5 per hour (deploy/free-host).
+      SPLITLEDGER_SIGNUP_LIMIT_PER_HOUR: ${SIGNUP_LIMIT_PER_HOUR:-100}
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:

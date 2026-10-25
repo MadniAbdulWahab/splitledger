@@ -513,3 +513,22 @@ The same build serves the installable-app files: `GET /manifest.webmanifest` 200
 
 Not yet done: deploying this to the free host (`git pull && docker compose up -d --build` in
 `deploy/free-host`; Flyway applies V10 and V11 on start) and installing it on a real phone.
+
+## 2026-10-25 (evening): open sign-up with a limit per network, join with a code
+
+```
+api              ./mvnw clean verify    204 tests, 0 failures, 0 errors
+statement-worker ./mvnw clean verify     13 tests, 0 failures, 0 errors
+web              npm test                64 tests passed; npm run build OK
+```
+
+New: `SignupThrottleTest` (limit within an hour, freed after the hour, checks alone use no slot),
+`RegistrationCodeTest` (the page is told a code is needed; one address creates at most the limit,
+failed sign-ups do not count, invite sign-ups count, another address is not affected),
+`PasswordLoginApiTest` (without a code anyone can sign up), `inviteCodeFrom` in `route.test.ts`.
+
+Browser walkthrough against `docker compose up --build`, now with three people per run: Lucy signs
+up without any code, lands on "Join a group", pastes the invite link Anna sent and sees the group.
+`Walkthrough passed: desktop and phone, three friends each`. A first run stopped at the sixth
+account from the same address with 429, as designed; the local stack (`compose.yaml`) now allows
+100 sign-ups per hour, the free host keeps 5.

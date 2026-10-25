@@ -171,6 +171,13 @@ export const registerAccount = (displayName: string, username: string, password:
   publicPost<{ token: string }>('/users', { displayName, username, password },
     registrationCode ? { 'X-Registration-Code': registrationCode } : {}).then((r) => r.token);
 
+/** Whether signing up needs the host's code; without one, anyone can create an account. */
+export async function registrationPolicy(): Promise<{ codeRequired: boolean }> {
+  const response = await fetch('/users/registration');
+  if (!response.ok) throw new ApiError(response.status, await problemText(response));
+  return readJson(response);
+}
+
 export const previewInvitation = (code: string) => publicPost<InvitationPreview>('/invitations/preview', { code });
 
 /** Opening an invite link without an account: creates it and joins the group. */

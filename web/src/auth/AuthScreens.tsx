@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import {
-  Api, login, previewInvitation, previewReset, redeemReset, registerAccount, signUpWithInvitation,
+  Api, login, previewInvitation, previewReset, redeemReset, registerAccount, registrationPolicy, signUpWithInvitation,
   type InvitationPreview, type ResetPreview,
 } from '../api';
 import { Field, Guilloche } from '../ui/parts';
@@ -50,7 +50,7 @@ export function SignIn({ onToken }: { onToken: (token: string) => void }) {
   const [password, setPassword] = useState('');
   const [submit, busy, error] = useSubmit(async () => onToken(await login(username, password)));
 
-  if (view === 'start') return <StartGroup onToken={onToken} onBack={() => setView('signin')} />;
+  if (view === 'start') return <CreateAccount onToken={onToken} onBack={() => setView('signin')} />;
   if (view === 'token') return <TokenSignIn onToken={onToken} onBack={() => setView('signin')} />;
 
   return (
@@ -72,27 +72,30 @@ export function SignIn({ onToken }: { onToken: (token: string) => void }) {
         <p className="hint">Forgot your password? Ask someone in your group to make you a reset link on their Group page.</p>
       </form>
       <div className="auth-alt">
-        <p className="muted small">Got an invite link? Open it and you can sign up from there.</p>
-        <button type="button" className="btn btn-link" onClick={() => setView('start')}>Start a new group</button>
+        <p className="muted small">New here?</p>
+        <button type="button" className="btn btn-quiet btn-block" onClick={() => setView('start')}>Create an account</button>
         <button type="button" className="btn btn-link small" onClick={() => setView('token')}>Sign in with an access token</button>
       </div>
     </AuthFrame>
   );
 }
 
-function StartGroup({ onToken, onBack }: { onToken: (token: string) => void; onBack: () => void }) {
+/** Anyone can sign up unless the host set a code; afterwards you start a group or join one with a code. */
+function CreateAccount({ onToken, onBack }: { onToken: (token: string) => void; onBack: () => void }) {
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
+  const [codeRequired, setCodeRequired] = useState(false);
+  useEffect(() => { registrationPolicy().then((p) => setCodeRequired(p.codeRequired), () => {}); }, []);
   const [submit, busy, error] = useSubmit(async () =>
     onToken(await registerAccount(name.trim(), username || suggestUsername(name), password, code.trim())));
 
   return (
     <AuthFrame>
       <form className="auth-panel" onSubmit={submit}>
-        <h1>Start a new group</h1>
-        <p className="muted small">Create your account, then your group, then send your friends their invite links.</p>
+        <h1>Create an account</h1>
+        <p className="muted small">Then start a group, or join a friend’s group with their invite link or code.</p>
         <Field label="Your name" hint="How your friends see you.">
           <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={80} autoComplete="name" />
         </Field>
@@ -101,9 +104,11 @@ function StartGroup({ onToken, onBack }: { onToken: (token: string) => void; onB
             autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={30} />
         </Field>
         <Field label="Password" hint="At least 8 characters."><PasswordInput value={password} onChange={setPassword} isNew /></Field>
-        <Field label="Host code" hint="The person who runs this SplitLedger gives it to you.">
-          <input value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" />
-        </Field>
+        {codeRequired && (
+          <Field label="Host code" hint="This SplitLedger is private; the person who runs it gives you the code. An invite link works without it.">
+            <input value={code} onChange={(e) => setCode(e.target.value)} autoComplete="off" required />
+          </Field>
+        )}
         {error && <p className="error-text" role="alert">{error}</p>}
         <button className="btn btn-primary btn-block" disabled={busy}>{busy ? 'Creating…' : 'Create account'}</button>
       </form>

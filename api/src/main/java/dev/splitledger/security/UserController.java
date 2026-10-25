@@ -2,6 +2,7 @@ package dev.splitledger.security;
 
 import dev.splitledger.group.GroupDtos.MembershipResponse;
 import dev.splitledger.group.GroupService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -26,18 +27,25 @@ class UserController {
 
     private final UserService userService;
     private final GroupService groupService;
+    private final SignupThrottle signupThrottle;
     private final String registrationCode;
 
     /**
-     * {@code splitledger.registration-code}: when set (e.g. on a public host), registering needs the
-     * header {@code X-Registration-Code} with this value, so only invited friends can create accounts.
-     * Friends who open an invite link do not need it (see {@code POST /invitations/signup}).
+     * {@code splitledger.registration-code}: empty (the default) means anyone may sign up, limited
+     * per network by {@link SignupThrottle}. When set, registering needs the header
+     * {@code X-Registration-Code} with this value. Friends who open an invite link never need it
+     * (see {@code POST /invitations/signup}).
      */
-    UserController(UserService userService, GroupService groupService,
+    UserController(UserService userService, GroupService groupService, SignupThrottle signupThrottle,
                    @Value("${splitledger.registration-code:}") String registrationCode) {
         this.userService = userService;
         this.groupService = groupService;
+        this.signupThrottle = signupThrottle;
         this.registrationCode = registrationCode;
+    }
+
+    /** Tells the sign-up page whether to ask for the host code. */
+    record RegistrationPolicy(boolean codeRequired) {
     }
 
     /** Without username and password the account gets an API token (scripts, API docs). */
@@ -56,20 +64,27 @@ class UserController {
     record PasswordRequest(@Size(max = 200) String currentPassword, @NotBlank @Size(max = 200) String newPassword) {
     }
 
+    @GetMapping("/users/registration")
+    RegistrationPolicy registrationPolicy() {
+        return new RegistrationPolicy(!registrationCode.isEmpty());
+    }
+
     @PostMapping("/users")
     @ResponseStatus(HttpStatus.CREATED)
     UserService.Registration register(@RequestHeader(value = "X-Registration-Code", required = false) String code,
-                                      @Valid @RequestBody RegisterRequest request) {
+                                      @Valid @RequestBody RegisterRequest request, HttpServletRequest http) {
         if (!registrationCode.isEmpty() && !constantTimeEquals(registrationCode, code)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Registration needs a valid X-Registration-Code header");
         }
-        if (request.username() == null && request.password() == null) {
-            return userService.register(request.displayName());
-        }
-        if (request.username() == null || request.password() == null) {
+        if ((request.username() == null) != (request.password() == null)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Send both username and password, or neither");
         }
-        return userService.register(request.displayName(), request.username(), request.password());
+        signupThrottle.check(http.getRemoteAddr());
+        UserService.Registration registration = request.username() == null
+                ? userService.register(request.displayName())
+                : userService.register(request.displayName(), request.username(), request.password());
+        signupThrottle.created(http.getRemoteAddr());
+        return registration;
     }
 
     record InvitationSignupRequest(@NotBlank @Size(max = 100) String code, @NotBlank @Size(max = 30) String username,
@@ -79,8 +94,11 @@ class UserController {
     /** Opening an invite link without an account: no registration code, the invite is the permission. */
     @PostMapping("/invitations/signup")
     @ResponseStatus(HttpStatus.CREATED)
-    UserService.Registration signUpWithInvitation(@Valid @RequestBody InvitationSignupRequest request) {
-        return userService.signUpWithInvitation(request.code(), request.username(), request.password());
+    UserService.Registration signUpWithInvitation(@Valid @RequestBody InvitationSignupRequest request, HttpServletRequest http) {
+        signupThrottle.check(http.getRemoteAddr());
+        UserService.Registration registration = userService.signUpWithInvitation(request.code(), request.username(), request.password());
+        signupThrottle.created(http.getRemoteAddr());
+        return registration;
     }
 
     @GetMapping("/me")

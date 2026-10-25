@@ -140,23 +140,41 @@ exists to avoid paying for Splitwise Pro.
 ## Free hosting for everyday use
 
 `deploy/free-host/` runs the API, PostgreSQL and Caddy, which fetches a Let's Encrypt certificate,
-so tokens only travel over HTTPS. Registration requires a code you share with your friends.
+so tokens only travel over HTTPS. Anyone can sign up (at most five new accounts per hour from one
+network); set `REGISTRATION_CODE` in `.env` to make sign-up need that code instead. Invite links
+always work without it.
 
 1. Get a free VM (for example Oracle Cloud Always Free, Ubuntu) and a domain pointing to it (a free
    DuckDNS name works). Open ports 80 and 443 in the VM's firewall and security list.
 2. Install Docker, clone this repository, then:
    ```bash
    cd deploy/free-host
-   cp .env.example .env      # DOMAIN, two database passwords, the registration code
+   cp .env.example .env      # DOMAIN, two database passwords, optionally a registration code
    docker compose up -d --build
    ```
-3. `BASE_URL=https://<your-domain> REGISTRATION_CODE=<code> scripts/demo.sh` checks it end to end.
+3. `BASE_URL=https://<your-domain> scripts/demo.sh` checks it end to end (add
+   `REGISTRATION_CODE=<code>` if you set one).
+4. To update later: `git pull && docker compose up -d --build` in `deploy/free-host`. New database
+   migrations run when the API starts; take a backup first (below).
 
 On a machine at home you can skip the domain and the open ports: a free Cloudflare Tunnel
 (`cloudflared`) forwards an HTTPS address to the API without exposing your network. Serverless
 platforms such as Cloudflare Workers cannot run this service itself (a JVM with PostgreSQL).
 
 Back up the database regularly, for example `docker compose exec db pg_dump -U splitledger splitledger > backup.sql`.
+
+Locked out, and nobody in your group can make you a reset link? As the host you can make one on
+the server: it is the same one-time link the app creates, with only its hash stored.
+
+```bash
+docker compose exec -T db psql -U splitledger -d splitledger -c "select id, display_name from app_user;"
+CODE="rst_$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=
+')"
+HASH=$(printf '%s' "$CODE" | sha256sum | cut -d' ' -f1)
+docker compose exec -T db psql -U splitledger -d splitledger -c   "insert into password_reset (user_id, group_id, created_by_member_id, code_hash, expires_at)
+   select m.user_id, m.group_id, m.id, '$HASH', now() + interval '1 hour' from member m where m.user_id = <id> limit 1;"
+echo "https://<your-domain>/#reset=$CODE"
+```
 
 ## API
 

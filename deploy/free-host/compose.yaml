@@ -33,8 +33,9 @@ services:
       SPRING_FLYWAY_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       DB_USER: splitledger_app
       DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}
-      # Only people who know this code can create an account.
-      SPLITLEDGER_REGISTRATION_CODE: ${REGISTRATION_CODE:?set REGISTRATION_CODE in .env}
+      # Empty: anyone can sign up (at most 5 accounts per hour from one network). Set it to make
+      # sign-up need this code; invite links never need it.
+      SPLITLEDGER_REGISTRATION_CODE: ${REGISTRATION_CODE:-}
     # No published port: only Caddy can reach the API, and only Caddy is exposed.
     depends_on:
       db:

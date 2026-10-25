@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { groupHref, linkFor, parseHash } from './route';
+import { groupHref, inviteCodeFrom, linkFor, parseHash } from './route';
 import { initials, memberColour, NOTE_COLOURS } from './avatar';
 import { formatShortDate, joinNames, relativeTime } from './format';
 
@@ -26,6 +26,19 @@ describe('parseHash', () => {
     const link = linkFor('join', 'inv_abc', 'https://example.org');
     expect(link).toBe('https://example.org/#join=inv_abc');
     expect(parseHash(new URL(link).hash)).toEqual({ kind: 'join', code: 'inv_abc' });
+  });
+});
+
+describe('inviteCodeFrom', () => {
+  it('takes the code from a pasted link or the code alone', () => {
+    expect(inviteCodeFrom('https://splitledger.example.org/#join=inv_Ab-9_x')).toBe('inv_Ab-9_x');
+    expect(inviteCodeFrom('  inv_Ab-9_x \n')).toBe('inv_Ab-9_x');
+  });
+
+  it('refuses anything else', () => {
+    expect(inviteCodeFrom('https://splitledger.example.org/#reset=rst_x')).toBeNull();
+    expect(inviteCodeFrom('hello')).toBeNull();
+    expect(inviteCodeFrom('')).toBeNull();
   });
 });
 

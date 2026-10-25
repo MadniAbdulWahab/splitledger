@@ -30,6 +30,13 @@ class PasswordLoginApiTest extends IntegrationTest {
     }
 
     @Test
+    void withoutARegistrationCodeAnyoneCanSignUp() {
+        assertThat(anonymous().get().uri("/users/registration")).hasStatusOk().bodyJson()
+                .hasPathSatisfying("$.codeRequired", v -> v.assertThat().isEqualTo(false));
+        assertThat(registerResult("Stranger", uniqueUsername("stranger"), "correct horse")).hasStatus(201);
+    }
+
+    @Test
     void wrongPasswordAndUnknownUserGetTheSameAnswer() {
         String username = uniqueUsername("Ben");
         registerWithPassword("Ben", username, "correct horse");
