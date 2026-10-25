@@ -1,5 +1,7 @@
 /* Type, controls and the app frame. Type scale: 12 / 14 / 16 / 20 / 28 / 44 px. */
 * { box-sizing: border-box; }
+/* App-like on phones: the page does not stretch past its edges (rubber-band) or move sideways. */
+html, body { overscroll-behavior: none; }
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
@@ -8,6 +10,7 @@ body {
   font: 400 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   -webkit-font-smoothing: antialiased;
   -webkit-tap-highlight-color: transparent;
+  overflow-x: clip;
 }
 h1, h2, h3, p { margin: 0; }
 h1 { font-size: 28px; line-height: 1.2; font-weight: 700; letter-spacing: -0.02em; }
@@ -45,11 +48,12 @@ button { cursor: pointer; border: 0; background: none; padding: 0; }
   font-weight: 600; white-space: nowrap; transition: background 120ms ease, transform 80ms ease;
 }
 .btn:active:not(:disabled) { transform: scale(0.98); }
+/* Hover colours only for a mouse: on a touch screen they stick after a tap and look "selected". */
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn-primary { background: var(--giro); color: var(--on-giro); }
-.btn-primary:hover:not(:disabled) { background: var(--giro-hover); }
+@media (hover: hover) { .btn-primary:hover:not(:disabled) { background: var(--giro-hover); } }
 .btn-quiet { background: var(--surface-2); color: var(--ink); }
-.btn-quiet:hover:not(:disabled) { background: var(--giro-soft); }
+@media (hover: hover) { .btn-quiet:hover:not(:disabled) { background: var(--giro-soft); } }
 .btn-link { min-height: 0; padding: 4px 2px; color: var(--giro); font-weight: 600; }
 .btn-danger { color: var(--owe); background: var(--owe-soft); }
 .btn-small { min-height: 34px; padding: 0 12px; font-size: 14px; border-radius: 10px; }
@@ -70,7 +74,8 @@ a { color: var(--giro); }
 
 .topbar {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  max-width: 680px; margin: 0 auto; padding: calc(12px + env(safe-area-inset-top)) 16px 8px;
+  /* iOS 26 Safari blurs a strip under the status bar; the extra space keeps the pill and avatar out of it. */
+  max-width: 680px; margin: 0 auto; padding: calc(24px + env(safe-area-inset-top)) 16px 8px;
 }
 .switcher {
   display: inline-flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px 12px 4px 4px;
@@ -82,10 +87,10 @@ a { color: var(--giro); }
   background: var(--card); color: var(--card-ink); font-weight: 700; font-size: 14px;
 }
 
-/* Phone navigation: four destinations and the add button raised in the middle. */
+/* Phone navigation: four destinations and the add button in the middle, all on one line. */
 .bottom-nav {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
-  display: grid; grid-template-columns: repeat(5, 1fr); align-items: end;
+  display: grid; grid-template-columns: repeat(5, 1fr); align-items: center;
   height: calc(var(--nav-height) + env(safe-area-inset-bottom));
   padding: 0 8px env(safe-area-inset-bottom);
   background: color-mix(in srgb, var(--surface) 92%, transparent);
@@ -93,19 +98,24 @@ a { color: var(--giro); }
   border-top: 1px solid var(--line);
 }
 .nav-item {
-  position: relative; display: grid; justify-items: center; gap: 2px; padding: 8px 0 10px;
+  position: relative; display: grid; justify-items: center; gap: 2px; padding: 6px 0;
   color: var(--muted); font-size: 12px; font-weight: 600; text-decoration: none;
 }
+/* The current tab: a soft pill behind its icon. */
+.nav-item .icon { width: 56px; height: 30px; padding: 4px 17px; border-radius: 999px; transition: background 150ms ease; }
 .nav-item[aria-current="page"] { color: var(--giro); }
+.nav-item[aria-current="page"] .icon { background: var(--giro-soft); }
 .nav-dot {
-  position: absolute; top: 6px; left: calc(50% + 8px); width: 9px; height: 9px; border-radius: 50%;
+  position: absolute; top: 5px; left: calc(50% + 12px); width: 9px; height: 9px; border-radius: 50%;
   background: var(--owe); border: 2px solid var(--surface);
 }
 .fab {
-  justify-self: center; display: grid; place-items: center; width: 58px; height: 58px; margin-bottom: 12px;
-  border-radius: 20px; background: var(--giro); color: var(--on-giro); box-shadow: var(--shadow-float);
+  justify-self: center; display: grid; place-items: center; width: 50px; height: 50px;
+  border-radius: 50%; background: var(--giro); color: var(--on-giro);
+  box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--giro) 70%, transparent);
 }
-.fab .icon { width: 28px; height: 28px; }
+.fab:active { transform: scale(0.94); }
+.fab .icon { width: 26px; height: 26px; }
 
 @media (min-width: 960px) {
   .topbar, .bottom-nav { display: none; }
@@ -123,7 +133,7 @@ a { color: var(--giro); }
     position: relative; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 12px;
     color: var(--ink); text-decoration: none; font-weight: 550;
   }
-  .side-nav a:hover { background: var(--surface-2); }
+  .side-nav a:hover { background: var(--surface-2); } /* wide screens have a mouse */
   .side-nav a[aria-current="page"] { background: var(--giro-soft); color: var(--giro); }
   .side-nav .nav-dot { position: static; margin-left: auto; }
   .sidebar .switcher { max-width: none; width: 100%; }

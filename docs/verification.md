@@ -532,3 +532,16 @@ up without any code, lands on "Join a group", pastes the invite link Anna sent a
 `Walkthrough passed: desktop and phone, three friends each`. A first run stopped at the sixth
 account from the same address with 429, as designed; the local stack (`compose.yaml`) now allows
 100 sign-ups per hour, the free host keeps 5.
+
+## 2026-10-26: phone fixes from real use on an iPhone
+
+Header moved below the area iOS 26 Safari blurs under the status bar; calmer bottom bar (one line,
+round add button, a pill behind the current tab); no rubber-band or sideways scrolling (page and
+sheets); hover colours only for a mouse, so tapped buttons no longer look selected; the insights
+tooltip opens inwards at the chart's edges and now also appears on a tap (Chrome sent a "mouse
+leave" right after the tap, which hid it).
+
+`web`: type check OK, 64 unit tests passed, build OK. Checked in Chrome at 390×844 (touch, dark)
+against the local API: tapping October shows "October 2026, Group 25,00 €, you 12,50 €" inside the
+card, and the page is not wider than the screen. The iOS-specific parts (status-bar blur,
+rubber-band) need a look on the iPhone after deploying.

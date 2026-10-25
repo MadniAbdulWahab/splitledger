@@ -61,7 +61,10 @@ export function Insights() {
   );
 }
 
-/** Columns per month, the group's total next to your share; hover or tap a month for the numbers. */
+/**
+ * Columns per month, the group's total next to your share; hover or tap a month for the numbers.
+ * Hover follows only a real mouse: after a tap, phones send a "mouse leave" that would hide it again.
+ */
 function MonthChart({ data }: { data: InsightsData }) {
   const [active, setActive] = useState<number | null>(null);
   // Drawn at the container's real width, so 12px labels stay 12px on a phone.
@@ -85,6 +88,9 @@ function MonthChart({ data }: { data: InsightsData }) {
   const band = (width - left) / data.months.length;
   const column = Math.min(24, (band - 14) / 2);
   const hovered = active === null ? null : data.months[active]!;
+  const tipX = active === null ? 0 : left + active * band + band / 2;
+  // Months near the edges get a tooltip that opens inwards (about 180px wide).
+  const tipSide = tipX < 100 ? 'start' : tipX > width - 100 ? 'end' : '';
   // When months get narrow, every other label is left out; the latest month always keeps its label.
 
   return (
@@ -94,7 +100,7 @@ function MonthChart({ data }: { data: InsightsData }) {
         <span><i className="swatch" style={{ background: 'var(--series-1)' }} />Group</span>
         <span><i className="swatch" style={{ background: 'var(--series-2)' }} />Your share</span>
       </div>
-      <div ref={box} style={{ position: 'relative' }} onMouseLeave={() => setActive(null)}>
+      <div ref={box} style={{ position: 'relative' }} onPointerLeave={(e) => { if (e.pointerType === 'mouse') setActive(null); }}>
         <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Spending per month, group and your share">
           {ticks.map((t) => (
             <g key={t}>
@@ -115,17 +121,17 @@ function MonthChart({ data }: { data: InsightsData }) {
                 )}
                 {/* The hover target is the whole month, much bigger than the columns. */}
                 <rect x={left + i * band} y={top} width={band} height={height - top} fill="transparent"
-                  onMouseEnter={() => setActive(i)} onClick={() => setActive(active === i ? null : i)} />
+                  onPointerEnter={(e) => { if (e.pointerType === 'mouse') setActive(i); }} onClick={() => setActive(i)} />
               </g>
             );
           })}
         </svg>
         {hovered && (
-          <div className="chart-tip" style={{
-            left: `${((left + active! * band + band / 2) / width) * 100}%`,
+          <div className={`chart-tip ${tipSide}`} style={{
+            left: `${(tipX / width) * 100}%`,
             top: `${(y(hovered.totalCents) / height) * 100}%`,
           }}>
-            {formatMonth(hovered.month)}: group {formatCents(hovered.totalCents)}, you {formatCents(hovered.myShareCents)}
+            {formatMonth(hovered.month)}<br />Group {formatCents(hovered.totalCents)}, you {formatCents(hovered.myShareCents)}
           </div>
         )}
       </div>
