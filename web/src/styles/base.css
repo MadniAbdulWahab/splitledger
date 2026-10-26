@@ -109,12 +109,12 @@ a { color: var(--giro); }
 .nav-item[aria-current="page"] { color: var(--giro); }
 .nav-item[aria-current="page"] .icon { background: var(--giro-soft); }
 .fab {
-  justify-self: center; align-self: start; margin-top: -22px;
-  display: grid; place-items: center; width: 62px; height: 62px;
-  border-radius: 20px; background: var(--giro); color: var(--on-giro); box-shadow: var(--shadow-float);
+  justify-self: center; align-self: start; margin-top: -28px;
+  display: grid; place-items: center; width: 70px; height: 70px;
+  border-radius: 22px; background: var(--giro); color: var(--on-giro); box-shadow: var(--shadow-float);
 }
 .fab:active { transform: scale(0.95); }
-.fab .icon { width: 30px; height: 30px; }
+.fab .icon { width: 34px; height: 34px; }
 
 @media (min-width: 960px) {
   .topbar, .bottom-nav { display: none; }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLOSE_DISTANCE, shouldClose } from './swipe';
+import { CLOSE_DISTANCE, FLICK_MIN_DISTANCE, shouldClose } from './swipe';
 
 describe('shouldClose', () => {
   it('closes after a long enough drag, however slow', () => {
@@ -7,12 +7,18 @@ describe('shouldClose', () => {
     expect(shouldClose(CLOSE_DISTANCE - 1, 2000)).toBe(false);
   });
 
-  it('closes on a quick flick over a shorter distance', () => {
-    expect(shouldClose(60, 80)).toBe(true); // 0.75 px/ms
-    expect(shouldClose(60, 400)).toBe(false); // slow: springs back
+  it('needs a third of a tall sheet', () => {
+    expect(shouldClose(200, 2000, 750)).toBe(false); // a third is 250
+    expect(shouldClose(250, 2000, 750)).toBe(true);
   });
 
-  it('ignores a tiny twitch even when fast', () => {
+  it('closes on a clear, fast flick', () => {
+    expect(shouldClose(FLICK_MIN_DISTANCE, 80)).toBe(true); // 1.1 px/ms
+    expect(shouldClose(FLICK_MIN_DISTANCE, 400)).toBe(false); // slow: springs back
+  });
+
+  it('springs back after a small pull, even a quick one', () => {
     expect(shouldClose(20, 5)).toBe(false);
+    expect(shouldClose(60, 40)).toBe(false); // 1.5 px/ms, but only 60px
   });
 });

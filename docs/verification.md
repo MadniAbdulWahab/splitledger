@@ -589,3 +589,12 @@ Ben the mirror image). In Chrome at 390×844 with real touch events: holding an 
 menu, and after release only `touchend` arrives (no mouse press on the menu's backdrop, no click).
 An earlier version closed the menu right away because the release turned into a mouse press on the
 backdrop.
+
+## 2026-10-26: stricter swipe, bigger add button, people as tiles
+
+A sheet now closes only after a drag of a third of its height (at least 140px) or a fast flick of
+at least 90px; a small pull, even a quick one, springs back. The add button is 70px. People on Home
+are tiles in two columns, tinted by who owes whom, unlike the expense lists.
+
+`web`: type check OK, 73 unit tests passed (`ui/swipe.test.ts`: a third of a tall sheet, a quick
+60px pull springs back), build OK. Checked at 390×844 in light and dark mode against the local API.

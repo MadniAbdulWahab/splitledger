@@ -3,13 +3,17 @@ import { useEffect, useRef, type RefObject } from 'react';
 // Swipe down to close a bottom sheet, as in phone apps: the sheet follows the finger and closes when
 // dragged far enough or flicked down quickly; otherwise it springs back.
 
-/** Dragged at least this far, or flicked faster than this (px per ms) over a shorter distance. */
-export const CLOSE_DISTANCE = 120;
-export const FLICK_SPEED = 0.5;
-const FLICK_MIN_DISTANCE = 40;
+/**
+ * Closes only when meant: dragged a third of the sheet's height (at least 140px), or flicked fast
+ * over a clear distance. A small or slow pull, even a quick little one, springs back.
+ */
+export const CLOSE_DISTANCE = 140;
+export const CLOSE_SHARE = 1 / 3;
+export const FLICK_SPEED = 0.9;
+export const FLICK_MIN_DISTANCE = 90;
 
-export function shouldClose(distance: number, milliseconds: number): boolean {
-  if (distance >= CLOSE_DISTANCE) return true;
+export function shouldClose(distance: number, milliseconds: number, sheetHeight = 0): boolean {
+  if (distance >= Math.max(CLOSE_DISTANCE, sheetHeight * CLOSE_SHARE)) return true;
   return distance >= FLICK_MIN_DISTANCE && distance / Math.max(1, milliseconds) >= FLICK_SPEED;
 }
 
@@ -54,7 +58,7 @@ export function useSwipeToClose(sheet: RefObject<HTMLElement | null>, onClose: (
       if (!dragging || distance === 0) return;
       dragging = false;
       el.style.transition = 'transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1)';
-      if (shouldClose(distance, Date.now() - startTime)) {
+      if (shouldClose(distance, Date.now() - startTime, el.offsetHeight)) {
         el.style.transform = 'translateY(100%)';
         setTimeout(() => close.current(), 180);
       } else {

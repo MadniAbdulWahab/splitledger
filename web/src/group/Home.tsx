@@ -113,7 +113,10 @@ export function Home({ banners, unread, onOpenFeed }: { banners?: ReactNode; unr
   );
 }
 
-/** Everyone else in the group and where you stand with them. */
+/**
+ * Everyone else in the group and where you stand with them, as tiles rather than list rows: tinted
+ * green when they owe you, red when you owe them. A tile with an open amount opens settle-up.
+ */
 export function People() {
   const { data, loaded, myMemberId, openSettle, go } = useGroup();
   const others = data.members.filter((m) => m.id !== myMemberId);
@@ -124,25 +127,33 @@ export function People() {
       {others.length === 0
         ? <div className="list"><Empty emoji="👋" title="Just you so far" text="Invite your flatmates or travel buddies from the Group page." /></div>
         : (
-          <ul className="list people">
+          <ul className="people">
             {others.map((m) => {
               const theyOwe = data.debts.find((d) => d.fromMemberId === m.id && d.toMemberId === myMemberId);
               const iOwe = data.debts.find((d) => d.fromMemberId === myMemberId && d.toMemberId === m.id);
               const debt = theyOwe ?? iOwe;
+              const tone = theyOwe ? 'owed' : iOwe ? 'owe' : '';
               const content = (
                 <>
-                  <Avatar id={m.id} name={m.displayName} />
-                  <span className="grow">
-                    <span className="title">{m.displayName}</span>
-                    <span className="sub">{theyOwe ? 'owes you' : iOwe ? 'you owe' : m.joined ? 'settled up' : 'invited, not joined yet'}</span>
+                  <span className="person-top">
+                    <Avatar id={m.id} name={m.displayName} size="medium" />
+                    <span className="person-name">{m.displayName}</span>
                   </span>
-                  {debt && <span className={`pill ${theyOwe ? 'owed' : 'owe'}`}><Money cents={debt.amountCents} /></span>}
+                  {debt ? (
+                    <span className="person-amount">
+                      <span className="person-status">{theyOwe ? 'owes you' : 'you owe'}</span>
+                      <Money cents={debt.amountCents} className={tone} />
+                    </span>
+                  ) : (
+                    <span className="person-status">{m.joined ? 'Settled up ✓' : 'Invited, not joined yet'}</span>
+                  )}
                 </>
               );
               return (
                 <li key={m.id}>
-                  {debt ? <button type="button" className="row clickable" onClick={() => openSettle(debt)}>{content}</button>
-                    : <div className="row">{content}</div>}
+                  {debt
+                    ? <button type="button" className={`person-tile ${tone}`} onClick={() => openSettle(debt)}>{content}</button>
+                    : <div className={`person-tile ${m.joined ? '' : 'pending'}`}>{content}</div>}
                 </li>
               );
             })}

@@ -81,7 +81,26 @@
   color: #fff; font-weight: 700; font-size: 14px; letter-spacing: 0.02em;
 }
 .avatar.small { width: 30px; height: 30px; font-size: 12px; }
+.avatar.medium { width: 46px; height: 46px; font-size: 16px; }
 .avatar.large { width: 64px; height: 64px; font-size: 22px; }
+
+/* People: tiles in two columns, tinted by who owes whom, so they read differently from expense lists. */
+.people { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.person-tile {
+  width: 100%; height: 100%; display: grid; gap: 14px; align-content: space-between; padding: 14px;
+  border-radius: 20px; background: var(--surface); border: 1px solid var(--line); text-align: left;
+}
+.person-tile.owed { background: var(--owed-soft); border-color: color-mix(in srgb, var(--owed) 30%, transparent); }
+.person-tile.owe { background: var(--owe-soft); border-color: color-mix(in srgb, var(--owe) 30%, transparent); }
+.person-tile.pending { border-style: dashed; }
+/* The tint says who owes whom; the name stays in normal ink, only the amount is coloured. */
+.person-tile.owed, .person-tile.owe { color: var(--ink); }
+button.person-tile:active { transform: scale(0.98); }
+.person-top { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.person-name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person-amount { display: grid; gap: 0; }
+.person-amount .money { font-size: 22px; letter-spacing: -0.02em; }
+.person-status { font-size: 13px; color: var(--muted); font-weight: 550; }
 .avatar-stack { display: inline-flex; }
 .avatar-stack .avatar + .avatar { margin-left: -10px; }
 .tile {
