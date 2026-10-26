@@ -37,7 +37,7 @@ export function useMemberLinks(): {
   return { newLink, show: setLink, sheet: link && <SendLink link={link} onClose={() => setLink(null)} /> };
 }
 
-/** Members, invite links, password reset links and your own IBAN. */
+/** People in the group, invite links, password reset links and your own IBAN. */
 export function GroupPage() {
   const { api, groupId, groupName, data, myMemberId, run, reload, openMember } = useGroup();
   const toast = useToast();
@@ -63,7 +63,7 @@ export function GroupPage() {
       <h1>{groupName}</h1>
 
       <section className="section">
-        <div className="section-head"><h2>Members</h2><span className="muted small">{data.members.length}</span></div>
+        <div className="section-head"><h2>People</h2><span className="muted small">{data.members.length}</span></div>
         <ul className="list">
           {data.members.map((m) => (
             <li key={m.id} className="row">
