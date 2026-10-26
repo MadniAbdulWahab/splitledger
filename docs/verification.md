@@ -638,3 +638,8 @@ New README and screenshots (`docs/evidence/2026-10-26-*.png`), taken at 390×844
 API with three friends who joined through their invite links. Taking them showed the insights
 category bars had never been drawn: the coloured part was an inline `span`, which ignores `width`.
 Both bar elements are blocks now. `web`: 79 unit tests passed, build OK.
+
+Later the same day the screenshots were taken again with a group of uni friends (a trip and the
+weeks after it, one expense entered twice and deleted, one payment by GiroCode). The add-expense
+sheet is taller than a 390×844 screen, so that one is taken at 430×932, which has the same
+proportions and shows the Add button. No code changes.

@@ -1,58 +1,56 @@
 # SplitLedger
 
-My flatmates and I split almost everything. Rent, groceries, the odd pizza night, train tickets to
-Berlin. For a long time we used Splitwise, and three things about it kept bugging me.
+A couple of my university group mates and I do a lot together. Dinners, cinema, bowling, birthdays, trips and so on. On many occasions, someone pays for everyone, so we kept track in Splitwise, and for a while the free version was good enough.
 
-Every shared payment already sat in somebody's bank account, and we still typed each one in again by
-hand. Anyone could quietly edit or delete an old expense and nobody would ever know. And when it was
-time to pay up, I was copying IBANs from a chat into my banking app, hoping I got the digits right.
-Searching for "what did we pay for that Berlin trip?" needed the paid plan on top.
+Then we went on a trip, and it wasn't. The free plan only lets you add a few expenses a day, and on a trip you have that many before lunch. Flights, the place we stayed, meals, tickets, trains. We ended up writing things down in our notes app and typing them in days later, which is exactly the job the app was supposed to do for us. Sorting it all out afterwards was no better. I wanted to look up what we paid for one dinner, and search turned out to be a paid feature. So were the charts that show where the money actually went. And paying each other back still meant copying an IBAN out of a chat into my banking app and hoping I got every digit right.
 
-So I built my own. SplitLedger is a shared-expenses app for a group of friends that treats the money
-the way a bank would: every change is recorded, nothing is ever overwritten, and settling up is one
-scan in your banking app.
+So I built my own app. SplitLedger is a shared-expenses app for a group of friends. You add as many expenses as you like, search and insights are there for everyone, and paying someone back is one scan with your banking app. Underneath, it treats the money the way a bank would: every change is recorded and nothing is ever overwritten.
 
 <p>
-  <img src="docs/evidence/2026-10-26-home.png" alt="Home: the group card shows what you owe overall, with money in both directions spelled out, and a tile for every person" width="230">
+  <img src="docs/evidence/2026-10-26-home.png" alt="Home: the group card shows what you get back overall, and a tile for every person with where you two stand" width="230">
   <img src="docs/evidence/2026-10-26-add-expense.png" alt="Adding an expense: the amount, a category suggested from the shop name, who paid and who shares" width="230">
-  <img src="docs/evidence/2026-10-26-settle-up.png" alt="Settling up: Tim scans a GiroCode with his banking app, or copies the IBAN" width="230">
+  <img src="docs/evidence/2026-10-26-settle-up.png" alt="Settling up: Ben scans the QR code with a banking app and everything is filled in, or copies the IBAN" width="230">
 </p>
 
 ## What it does
 
+**No limit on a busy day.** Add ten expenses in an afternoon if that's what the day was. The form
+starts with the amount, guesses the category from the name (Lidl is groceries, DB is transport),
+splits equally by default and shows everyone's share before you save. Shares, exact amounts and
+leaving someone out are one tap away.
+
+**Settle with a scan.** "Ben owes you 90,34 €" comes with a GiroCode, the QR code German banking apps
+read for transfers. Ben scans it and my name, IBAN, the amount and a reference are already filled
+in. Nothing to type, nothing to get wrong, just check and send. If a banking app can't scan it, one
+tap copies the IBAN.
+
+**Search, without paying for it.** "Einkauf" finds "Einkäufe", a typo like "Pizerria" still finds
+"Pizzeria Bella Napoli", and you can filter by person, category, date or amount. Across the whole
+history, for everyone in the group.
+
+**Insights, also free.** What the group spent each month next to your own share, which categories
+the money went to, and who paid how much.
+
 **Import instead of typing.** I upload the CSV export from my online banking and every outgoing
-payment shows up as a candidate that only I can see. I share the ones that were for the flat and
+payment shows up as a candidate that only I can see. I share the ones that were for the group and
 ignore the rest. Importing the same file twice, or one that overlaps last month's, adds nothing new,
 and two identical coffees on the same day still count as two.
 
-**Settle with a scan.** "Lucy owes you 29,48 €" comes with a GiroCode, the QR code German banking apps
-read for transfers. Lucy scans it, finds name, IBAN, amount and reference already filled in, checks
-and sends. If she'd rather type it, one tap copies the IBAN.
-
-**A history nobody can rewrite.** Anyone can fix a mistake, but fixing never erases. Edit an
-expense and the old version stays in the history, crossed out, with who changed it and when. The
-home card opens a timeline of every expense and payment with what each one did to your balance, so
-you can see exactly how you ended up owing 749,45 €.
-
-**Search that understands German.** "Einkauf" finds "Einkäufe", a typo like "Pizerria" still finds
-"Pizzeria Napoli", and you can filter by person, category, date or amount. Free, for the whole history.
+**A history nobody can rewrite.** Anyone can fix a mistake, but fixing never erases. When the cinema
+got entered twice, deleting one copy left it in the history, crossed out, with who deleted it and
+when. The home card opens a timeline of every expense and payment with what each one did to your
+balance, so you can always see how you got to the number on the card.
 
 **Joining takes ten seconds.** I add a friend by name and send them a link on WhatsApp. They pick a
 username and password and they're in. Forgot your password? Anyone in your group can make you a
 one-time reset link.
 
-**It feels like an app.** It installs to the home screen, has a dark mode, categories that guess
-themselves from the shop name (REWE is groceries, DB is transport), monthly insights with your own
-share, and a page for every person showing where you two stand.
+**It feels like an app.** It installs to the home screen, has a dark mode, and every person gets a
+page showing where you two stand, with the expenses and payments between you.
 
 <p>
-  <img src="docs/evidence/2026-10-26-how-it-added-up.png" alt="How it added up: every expense and payment with what it did to your balance" width="230">
   <img src="docs/evidence/2026-10-26-activity.png" alt="Activity: the whole history by month, with a deleted expense crossed out and who deleted it" width="230">
-  <img src="docs/evidence/2026-10-26-person.png" alt="A person's page: where you two stand, with settle up, and the history between you" width="230">
-</p>
-<p>
   <img src="docs/evidence/2026-10-26-insights.png" alt="Insights: spending per month for the group and for you, and per category" width="230">
-  <img src="docs/evidence/2026-10-26-search.png" alt="Search with a typo: Pizerria finds Pizzeria Napoli" width="230">
 </p>
 
 It's a personal project for friends, not a payment service. No money moves through it and it never
