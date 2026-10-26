@@ -101,6 +101,21 @@ button.person-tile:active { transform: scale(0.98); }
 .person-amount { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
 .person-amount .money { font-size: 17px; letter-spacing: -0.01em; }
 .person-status { font-size: 12px; color: var(--muted); font-weight: 550; white-space: nowrap; }
+
+/* A person's page: their card on top (tinted like their tile), history below. */
+.back-link { justify-self: start; margin-bottom: -12px; }
+.member-card {
+  display: grid; justify-items: center; gap: 10px; padding: 22px 18px 18px; text-align: center;
+  border-radius: var(--radius-card); background: var(--surface); border: 1px solid var(--line);
+}
+.member-card.owed { background: var(--owed-soft); border-color: color-mix(in srgb, var(--owed) 30%, transparent); }
+.member-card.owe { background: var(--owe-soft); border-color: color-mix(in srgb, var(--owe) 30%, transparent); }
+.member-card.owed, .member-card.owe { color: var(--ink); } /* only the amount carries the colour */
+.member-who { display: grid; gap: 2px; }
+.member-balance { display: grid; justify-items: center; gap: 2px; }
+.member-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 4px; }
+/* A list row whose main part opens a page, with its own buttons next to it. */
+.row-link { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; text-align: left; border-radius: 10px; }
 .avatar-stack { display: inline-flex; }
 .avatar-stack .avatar + .avatar { margin-left: -10px; }
 .tile {

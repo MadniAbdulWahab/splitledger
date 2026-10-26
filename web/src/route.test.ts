@@ -16,6 +16,12 @@ describe('parseHash', () => {
     expect(parseHash('#/g/12/expenses')).toEqual({ kind: 'group', groupId: 12, screen: 'activity' });
   });
 
+  it('reads a person\'s page and needs their id', () => {
+    expect(parseHash('#/g/12/member/34')).toEqual({ kind: 'group', groupId: 12, screen: 'member', memberId: 34 });
+    expect(parseHash('#/g/12/member')).toEqual({ kind: 'group', groupId: 12, screen: 'home' });
+    expect(parseHash(groupHref(12, 'member', 34))).toEqual({ kind: 'group', groupId: 12, screen: 'member', memberId: 34 });
+  });
+
   it('ignores anything else', () => {
     expect(parseHash('')).toEqual({ kind: 'none' });
     expect(parseHash('#join=<script>')).toEqual({ kind: 'none' });

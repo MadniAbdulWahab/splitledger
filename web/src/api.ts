@@ -114,9 +114,11 @@ export class Api {
       { 'Idempotency-Key': newIdempotencyKey() });
 
   /** Without q: the whole history, newest first. Pass nextCursor to get the following page. */
-  search = (g: number, q: string, options: { cursor?: string; category?: Category | null; limit?: number } = {}) => {
+  /** member: only expenses that person paid or shares. */
+  search = (g: number, q: string, options: { cursor?: string; category?: Category | null; limit?: number; member?: number } = {}) => {
     const params = new URLSearchParams({ limit: String(options.limit ?? 20), q });
     if (options.cursor) params.set('cursor', options.cursor);
+    if (options.member) params.set('member', String(options.member));
     if (options.category) params.set('category', options.category);
     return this.json<{ items: ExpenseHit[]; nextCursor: string | null }>('GET', `/groups/${g}/expenses/search?${params}`);
   };

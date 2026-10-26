@@ -608,3 +608,14 @@ downward gesture can. Sideways rows keep their overscroll to themselves.
 `web`: type check OK, 76 unit tests passed (new: `lockAxis`), build OK. In Chrome at 390×844 with
 real touch events: a leftward swipe over the categories that drifted 35px down scrolled them by
 291px, the sheet moved 0px and stayed open; a swipe down from the sheet's head closed it.
+
+## 2026-10-26: a page for every person
+
+`#/g/{group}/member/{member}`: the person's card (name, joined or invited, IBAN, where you two stand,
+Settle up, invite or password reset link) and below it the payments between you and every expense
+they paid or share (the search's `member` filter, no API change). Opened from the People tiles and
+from the member list on the Group page; the phone's back gesture returns to where it was opened.
+
+`web`: type check OK, 77 unit tests passed (new: the person route), build OK. In Chrome at 390×844
+against the local API: Ben's page from his tile (owes you 12,50 €, his expense listed), Kyle's page
+from the Group page (you owe 10,00 €), back returned to the Group page.

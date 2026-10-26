@@ -44,6 +44,8 @@ export interface GroupContextValue {
   run: (action: () => Promise<unknown>, success?: string) => Promise<boolean>;
   nameOf: (memberId: number | null | undefined) => string;
   go: (screen: Screen) => void;
+  /** A person's page: who they are, where you stand, their history. */
+  openMember: (memberId: number) => void;
   openExpense: (draft: Draft) => void;
   openExpenseDetail: (expenseId: number) => void;
   /** Edit, delete or details: what a press and hold on an expense row opens. */

@@ -4,19 +4,20 @@ import { useCallback, useEffect, useState } from 'react';
 // without a router library and without the server knowing any page paths.
 //
 //   #/g/12/home          a screen of a group
+//   #/g/12/member/34     one person's page
 //   #join=inv_…          an invite link
 //   #reset=rst_…         a password reset link
 //
 // Invite and reset codes live in the fragment on purpose: browsers never send it to the server,
 // so the codes never appear in request logs.
 
-export const SCREENS = ['home', 'activity', 'insights', 'bank', 'group'] as const;
+export const SCREENS = ['home', 'activity', 'insights', 'bank', 'group', 'member'] as const;
 export type Screen = typeof SCREENS[number];
 
 export type Route =
   | { kind: 'join'; code: string }
   | { kind: 'reset'; code: string }
-  | { kind: 'group'; groupId: number; screen: Screen }
+  | { kind: 'group'; groupId: number; screen: Screen; memberId?: number }
   | { kind: 'none' };
 
 export function parseHash(hash: string): Route {
@@ -25,11 +26,15 @@ export function parseHash(hash: string): Route {
   if (link) {
     return { kind: link[1] as 'join' | 'reset', code: link[2]! };
   }
-  const group = /^\/g\/(\d+)(?:\/([a-z]+))?$/.exec(value);
+  const group = /^\/g\/(\d+)(?:\/([a-z]+)(?:\/(\d+))?)?$/.exec(value);
   if (group) {
     // "expenses" was the history's old name; links and bookmarks to it still land there.
     const name = group[2] === 'expenses' ? 'activity' : group[2];
     const screen = SCREENS.find((s) => s === name) ?? 'home';
+    if (screen === 'member') {
+      return group[3] ? { kind: 'group', groupId: Number(group[1]), screen, memberId: Number(group[3]) }
+        : { kind: 'group', groupId: Number(group[1]), screen: 'home' };
+    }
     return { kind: 'group', groupId: Number(group[1]), screen };
   }
   return { kind: 'none' };
@@ -41,8 +46,8 @@ export function inviteCodeFrom(text: string): string | null {
   return match ? match[1]! : null;
 }
 
-export function groupHref(groupId: number, screen: Screen = 'home'): string {
-  return `#/g/${groupId}/${screen}`;
+export function groupHref(groupId: number, screen: Screen = 'home', memberId?: number): string {
+  return `#/g/${groupId}/${screen}${memberId !== undefined ? `/${memberId}` : ''}`;
 }
 
 /** The full link a friend receives, e.g. https://host/#join=inv_… */

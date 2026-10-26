@@ -150,7 +150,10 @@ async function walkthrough(name, options) {
   await ben.page.locator('.group-card .card-new').waitFor({ state: 'detached' });
 
   // Settling up: the GiroCode for Ben to scan, then Anna marks the money as received.
+  // Ben's tile opens his page; settle-up starts from there.
   await person('Ben').click();
+  await page.getByRole('heading', { name: 'Ben', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Settle up' }).last().click();
   await page.getByRole('button', { name: 'Show GiroCode' }).click();
   const qr = page.locator('.qr img');
   await qr.waitFor();

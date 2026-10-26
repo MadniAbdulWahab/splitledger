@@ -115,10 +115,10 @@ export function Home({ banners, unread, onOpenFeed }: { banners?: ReactNode; unr
 
 /**
  * Everyone else in the group and where you stand with them, as tiles rather than list rows: tinted
- * green when they owe you, red when you owe them. A tile with an open amount opens settle-up.
+ * green when they owe you, red when you owe them. A tile opens the person's page.
  */
 export function People() {
-  const { data, loaded, myMemberId, openSettle, go } = useGroup();
+  const { data, loaded, myMemberId, openMember, go } = useGroup();
   const others = data.members.filter((m) => m.id !== myMemberId);
   if (!loaded) return <section className="section"><h2>People</h2><SkeletonRows count={2} /></section>;
   return (
@@ -151,9 +151,9 @@ export function People() {
               );
               return (
                 <li key={m.id}>
-                  {debt
-                    ? <button type="button" className={`person-tile ${tone}`} onClick={() => openSettle(debt)}>{content}</button>
-                    : <div className={`person-tile ${m.joined ? '' : 'pending'}`}>{content}</div>}
+                  <button type="button" className={`person-tile ${tone} ${m.joined ? '' : 'pending'}`} onClick={() => openMember(m.id)}>
+                    {content}
+                  </button>
                 </li>
               );
             })}

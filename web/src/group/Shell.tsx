@@ -15,6 +15,7 @@ import { ExpenseActions, ExpenseDetail, Expenses } from './Expenses';
 import { GroupPage } from './GroupPage';
 import { Home, People } from './Home';
 import { Insights } from './Insights';
+import { MemberPage } from './MemberPage';
 import { SettleSheet } from './SettleSheet';
 
 type SheetState =
@@ -82,13 +83,13 @@ export function SignedIn({ api, route, navigate, onSignOut }: {
   }
   return (
     <GroupApp key={membership.groupId} api={api} me={me} groupId={membership.groupId} groupName={membership.groupName}
-      myMemberId={membership.memberId} screen={routed?.screen ?? 'home'} navigate={navigate}
+      myMemberId={membership.memberId} screen={routed?.screen ?? 'home'} memberId={routed?.memberId} navigate={navigate}
       onMeChanged={() => void loadMe()} onSignOut={onSignOut} />
   );
 }
 
-function GroupApp({ api, me, groupId, groupName, myMemberId, screen, navigate, onMeChanged, onSignOut }: {
-  api: Api; me: Me; groupId: number; groupName: string; myMemberId: number; screen: Screen;
+function GroupApp({ api, me, groupId, groupName, myMemberId, screen, memberId, navigate, onMeChanged, onSignOut }: {
+  api: Api; me: Me; groupId: number; groupName: string; myMemberId: number; screen: Screen; memberId?: number;
   navigate: (hash: string, replace?: boolean) => void; onMeChanged: () => void; onSignOut: (everywhere: boolean) => void;
 }) {
   const toast = useToast();
@@ -116,6 +117,7 @@ function GroupApp({ api, me, groupId, groupName, myMemberId, screen, navigate, o
   const value: GroupContextValue = useMemo(() => ({
     api, groupId, groupName, myMemberId, data, loaded, version, reload, run, nameOf,
     go: (s: Screen) => navigate(groupHref(groupId, s)),
+    openMember: (memberId: number) => navigate(groupHref(groupId, 'member', memberId)),
     openExpense: (draft: Draft) => setSheet({ kind: 'expense', draft }),
     openExpenseDetail: (expenseId: number) => setSheet({ kind: 'detail', expenseId }),
     openExpenseActions: (hit: ExpenseHit) => setSheet({ kind: 'actions', hit }),
@@ -189,6 +191,7 @@ function GroupApp({ api, me, groupId, groupName, myMemberId, screen, navigate, o
         <main className="main">
           {screen === 'home' && <Home banners={banners} unread={unread} onOpenFeed={() => setSheet({ kind: 'feed' })} />}
           {screen === 'activity' && <Expenses />}
+          {screen === 'member' && memberId !== undefined && <MemberPage key={memberId} memberId={memberId} />}
           {screen === 'insights' && <Insights />}
           {screen === 'bank' && <Bank />}
           {screen === 'group' && <GroupPage />}

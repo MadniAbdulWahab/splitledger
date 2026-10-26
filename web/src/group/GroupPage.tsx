@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { formatIban } from '../format';
 import { linkFor } from '../route';
 import { Icon } from '../ui/Icon';
@@ -8,13 +8,41 @@ import { useGroup } from './context';
 
 interface LinkToSend { kind: 'join' | 'reset'; name: string; url: string }
 
+/**
+ * Invite and password reset links for a member, shared by the Group page and a person's page:
+ * newLink makes one and shows it in the send sheet ({@code sheet}, to render on the page).
+ */
+export function useMemberLinks(): {
+  newLink: (memberId: number, memberName: string, kind: 'join' | 'reset') => Promise<void>;
+  show: (link: LinkToSend) => void;
+  sheet: ReactNode;
+} {
+  const { api, groupId, reload } = useGroup();
+  const toast = useToast();
+  const [link, setLink] = useState<LinkToSend | null>(null);
+
+  async function newLink(memberId: number, memberName: string, kind: 'join' | 'reset') {
+    try {
+      const url = kind === 'join'
+        ? linkFor('join', (await api.reissueInvitation(groupId, memberId)).inviteCode)
+        : linkFor('reset', (await api.createPasswordReset(groupId, memberId)).resetCode);
+      setLink({ kind, name: memberName, url });
+      if (kind === 'reset') await reload(); // the reset shows up in the activity
+    } catch (err) {
+      toast((err as Error).message, 'error');
+    }
+  }
+
+  return { newLink, show: setLink, sheet: link && <SendLink link={link} onClose={() => setLink(null)} /> };
+}
+
 /** Members, invite links, password reset links and your own IBAN. */
 export function GroupPage() {
-  const { api, groupId, groupName, data, myMemberId, run, reload } = useGroup();
+  const { api, groupId, groupName, data, myMemberId, run, reload, openMember } = useGroup();
   const toast = useToast();
+  const links = useMemberLinks();
   const [name, setName] = useState('');
   const [iban, setIban] = useState('');
-  const [link, setLink] = useState<LinkToSend | null>(null);
   const me = data.members.find((m) => m.id === myMemberId);
 
   async function invite(e: FormEvent) {
@@ -24,19 +52,7 @@ export function GroupPage() {
       const added = await api.addMember(groupId, friend);
       setName('');
       await reload();
-      setLink({ kind: 'join', name: friend, url: linkFor('join', added.inviteCode) });
-    } catch (err) {
-      toast((err as Error).message, 'error');
-    }
-  }
-
-  async function newLink(memberId: number, memberName: string, kind: 'join' | 'reset') {
-    try {
-      const url = kind === 'join'
-        ? linkFor('join', (await api.reissueInvitation(groupId, memberId)).inviteCode)
-        : linkFor('reset', (await api.createPasswordReset(groupId, memberId)).resetCode);
-      setLink({ kind, name: memberName, url });
-      if (kind === 'reset') await reload(); // the reset shows up in the activity
+      links.show({ kind: 'join', name: friend, url: linkFor('join', added.inviteCode) });
     } catch (err) {
       toast((err as Error).message, 'error');
     }
@@ -51,13 +67,15 @@ export function GroupPage() {
         <ul className="list">
           {data.members.map((m) => (
             <li key={m.id} className="row">
-              <Avatar id={m.id} name={m.displayName} />
-              <span className="grow">
-                <span className="title">{m.displayName}{m.id === myMemberId ? ' (you)' : ''}</span>
-                <span className="sub">{!m.joined ? 'Invited, not joined yet' : m.iban ? formatIban(m.iban) : 'No IBAN yet'}</span>
-              </span>
+              <button type="button" className="row-link" onClick={() => openMember(m.id)}>
+                <Avatar id={m.id} name={m.displayName} />
+                <span className="grow">
+                  <span className="title">{m.displayName}{m.id === myMemberId ? ' (you)' : ''}</span>
+                  <span className="sub">{!m.joined ? 'Invited, not joined yet' : m.iban ? formatIban(m.iban) : 'No IBAN yet'}</span>
+                </span>
+              </button>
               {!m.joined && (
-                <button type="button" className="btn btn-quiet btn-small" onClick={() => void newLink(m.id, m.displayName, 'join')}>
+                <button type="button" className="btn btn-quiet btn-small" onClick={() => void links.newLink(m.id, m.displayName, 'join')}>
                   <Icon name="share" small />Invite link
                 </button>
               )}
@@ -65,7 +83,7 @@ export function GroupPage() {
                 <button type="button" className="btn btn-quiet btn-small" title={`Make a password reset link for ${m.displayName}`}
                   onClick={() => {
                     if (window.confirm(`Make a one-time password reset link for ${m.displayName}? Everyone in the group sees that you made it.`)) {
-                      void newLink(m.id, m.displayName, 'reset');
+                      void links.newLink(m.id, m.displayName, 'reset');
                     }
                   }}>
                   <Icon name="key" small /><span className="visually-hidden">Reset password link for {m.displayName}</span>
@@ -99,7 +117,7 @@ export function GroupPage() {
         </Field>
       </form>
 
-      {link && <SendLink link={link} onClose={() => setLink(null)} />}
+      {links.sheet}
     </>
   );
 }
