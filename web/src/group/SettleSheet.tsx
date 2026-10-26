@@ -5,6 +5,7 @@ import { newIdempotencyKey } from '../ids';
 import { useSingleFlight } from '../ui/once';
 import { Icon } from '../ui/Icon';
 import { Avatar, Empty, Money, Sheet } from '../ui/parts';
+import { useToast } from '../ui/toast';
 import { useGroup } from './context';
 
 const pairKey = (d: SuggestedPayment) => `${d.fromMemberId}-${d.toMemberId}`;
@@ -108,6 +109,7 @@ function DebtList({ title, debts, empty, onPick }: {
 }
 
 function PaymentDetail({ debt, onBack, onPaid }: { debt: SuggestedPayment; onBack?: () => void; onPaid: () => void }) {
+  const toast = useToast();
   const { api, groupId, myMemberId, data, run } = useGroup();
   const [qr, setQr] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +120,16 @@ function PaymentDetail({ debt, onBack, onPaid }: { debt: SuggestedPayment; onBac
   const theyOweMe = debt.toMemberId === myMemberId;
   const myIban = data.members.find((m) => m.id === myMemberId)?.iban ?? null;
   const receiverIban = theyOweMe ? myIban : debt.toIban;
+
+  // For typing the transfer by hand instead of scanning: without spaces, which every banking app takes.
+  async function copyIban(iban: string) {
+    try {
+      await navigator.clipboard.writeText(iban.replace(/\s/g, ''));
+      toast('IBAN copied');
+    } catch {
+      toast('Copying is blocked here; press and hold the IBAN to select it.', 'error');
+    }
+  }
 
   // Like the expense sheet: one key per screen and a lock, so a double tap records one payment.
   const [requestKey] = useState(newIdempotencyKey);
@@ -138,7 +150,14 @@ function PaymentDetail({ debt, onBack, onPaid }: { debt: SuggestedPayment; onBac
       <div style={{ textAlign: 'center', display: 'grid', gap: 4 }}>
         <p className="muted">{iOwe ? `You pay ${debt.toName}` : theyOweMe ? `${debt.fromName} pays you` : `${debt.fromName} pays ${debt.toName}`}</p>
         <Money cents={debt.amountCents} big />
-        <p className="muted small">{receiverIban ? `to ${formatIban(receiverIban)}` : `${debt.toName} has not added an IBAN yet.`}</p>
+        {receiverIban ? (
+          <div className="iban-line">
+            <span className="muted small">to <span className="iban">{formatIban(receiverIban)}</span></span>
+            <button type="button" className="btn btn-quiet btn-small" onClick={() => void copyIban(receiverIban)}>
+              <Icon name="copy" small />Copy IBAN
+            </button>
+          </div>
+        ) : <p className="muted small">{debt.toName} has not added an IBAN yet.</p>}
       </div>
 
       {receiverIban && (

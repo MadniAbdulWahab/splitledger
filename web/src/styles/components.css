@@ -235,6 +235,8 @@ details.more summary::-webkit-details-marker { display: none; }
 .banner .grow { flex: 1; min-width: 200px; }
 
 /* ---------- Settle up ---------- */
+.iban-line { display: grid; justify-items: center; gap: 6px; }
+.iban { user-select: all; -webkit-user-select: all; font-variant-numeric: tabular-nums; } /* one press selects all of it */
 .qr { display: grid; justify-items: center; gap: 10px; padding: 16px; border-radius: var(--radius-surface); background: var(--surface-2); text-align: center; }
 .qr img { width: 220px; height: 220px; image-rendering: pixelated; background: #fff; border-radius: 12px; padding: 8px; }
 .settled { display: grid; justify-items: center; gap: 12px; padding: 24px 0 8px; text-align: center; }

@@ -37,7 +37,7 @@ async function shows(locator, text, message) {
 }
 
 async function open(name, options) {
-  const context = await browser.newContext(options);
+  const context = await browser.newContext({ ...options, permissions: ['clipboard-read', 'clipboard-write'] });
   const page = await context.newPage();
   page.on('pageerror', (e) => problems.push(`${name}: ${e.message}`));
   page.on('console', (m) => { if (m.type() === 'error') problems.push(`${name}: console: ${m.text()}`); });
@@ -154,6 +154,10 @@ async function walkthrough(name, options) {
   await person('Ben').click();
   await page.getByRole('heading', { name: 'Ben', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Settle up' }).last().click();
+  // Copy IBAN puts Anna's IBAN, without spaces, on the clipboard for typing the transfer by hand.
+  await page.getByRole('button', { name: 'Copy IBAN' }).click();
+  await toast('IBAN copied');
+  check(await page.evaluate(() => navigator.clipboard.readText()) === ownIban.replace(/\s/g, ''), 'Copy IBAN copies the IBAN');
   await page.getByRole('button', { name: 'Show GiroCode' }).click();
   const qr = page.locator('.qr img');
   await qr.waitFor();
