@@ -18,13 +18,13 @@ import org.springframework.context.annotation.Configuration;
                 title = "SplitLedger API",
                 version = "0.1",
                 description = "Shared expenses for a group of friends: bank statement import without duplicates, "
-                        + "double-entry ledger with a verifiable hash chain, search and settle-up. "
-                        + "Amounts are integer cents; errors are RFC 9457 problem details."),
+                        + "double-entry ledger with a verifiable hash chain, search, insights, an activity feed "
+                        + "and settle-up with GiroCode. Amounts are integer cents; errors are RFC 9457 problem details."),
         security = @SecurityRequirement(name = "apiToken"))
 @SecurityScheme(
         name = "apiToken",
         type = SecuritySchemeType.HTTP,
         scheme = "bearer",
-        description = "Token returned once by POST /users, e.g. slt_...")
+        description = "A session token from POST /sessions (sign-in), or an API token returned once by POST /users, e.g. slt_...")
 class OpenApiConfig {
 }

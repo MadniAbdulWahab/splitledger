@@ -1,51 +1,131 @@
 # SplitLedger
 
-My friends and I share costs and track them in Splitwise. Every shared payment already exists in
-someone's German bank account, yet it has to be typed in again by hand; settling up means copying
-IBANs into a banking app; any entry can be edited or deleted later without a trace; and searching
-the history ("what did we pay for the Berlin trip?") needs the paid plan.
+My flatmates and I split almost everything. Rent, groceries, the odd pizza night, train tickets to
+Berlin. For a long time we used Splitwise, and three things about it kept bugging me.
 
-SplitLedger is a small ledger service for one group of friends that fixes exactly that:
+Every shared payment already sat in somebody's bank account, and we still typed each one in again by
+hand. Anyone could quietly edit or delete an old expense and nobody would ever know. And when it was
+time to pay up, I was copying IBANs from a chat into my banking app, hoping I got the digits right.
+Searching for "what did we pay for that Berlin trip?" needed the paid plan on top.
 
-1. **Import instead of typing.** Upload your bank statement export; outgoing payments become
-   expense candidates only you can see, and importing the same or an overlapping file never
-   creates duplicates (two identical coffees on one day stay two).
-2. **History nobody can quietly rewrite.** Anyone in the group can edit or delete an expense or
-   undo a payment, but nothing is overwritten: underneath it is an append-only, double-entry
-   ledger where a change is a reversing entry plus the new version, the old one stays visible with
-   who changed it, PostgreSQL rejects UPDATE and DELETE, and a SHA-256 hash chain shows if someone
-   with database access changed anything.
-3. **Search the whole history, free.** German word forms ("Einkauf" finds "Einkäufe"), typos
-   ("Pizerria") and filters, on PostgreSQL full-text and trigram indexes.
-4. **Settle with a scan.** "You owe Lucy 10,00 €" comes with a GiroCode (EPC QR) that German
-   banking apps scan; recording the payment updates the ledger.
-5. **Join with a link.** A friend opens the invite link from WhatsApp, picks a username and a
-   password and is in the group; a forgotten password is fixed with a reset link from a groupmate.
-6. **See where the money goes.** Categories (suggested from the payee: "REWE" is groceries),
-   monthly insights with your own share, and an activity feed of who added, paid or changed what.
-
-Friends use it as a web app on their phones (installable to the home screen) or on a laptop,
-served by the same service.
+So I built my own. SplitLedger is a shared-expenses app for a group of friends that treats the money
+the way a bank would: every change is recorded, nothing is ever overwritten, and settling up is one
+scan in your banking app.
 
 <p>
-  <img src="docs/evidence/2026-10-25-phone-home.png" alt="Home on a phone: the group card with your balance, quick actions, people and the latest expenses" width="250">
-  <img src="docs/evidence/2026-10-25-phone-invite-link.png" alt="Opening an invite link: Anna invited you to WG Kessenich, choose a username and password" width="250">
-  <img src="docs/evidence/2026-10-25-phone-settle-up.png" alt="Settling up with a GiroCode to scan in a banking app" width="250">
+  <img src="docs/evidence/2026-10-26-home.png" alt="Home: the group card shows what you owe overall, with money in both directions spelled out, and a tile for every person" width="230">
+  <img src="docs/evidence/2026-10-26-add-expense.png" alt="Adding an expense: the amount, a category suggested from the shop name, who paid and who shares" width="230">
+  <img src="docs/evidence/2026-10-26-settle-up.png" alt="Settling up: Tim scans a GiroCode with his banking app, or copies the IBAN" width="230">
 </p>
 
-It is a personal project for a group of friends, not a payment service: no money is moved and no
-bank API is called. Deployed and verified on AWS; the stack is torn down between demos.
+## What it does
 
-## Architecture
+**Import instead of typing.** I upload the CSV export from my online banking and every outgoing
+payment shows up as a candidate that only I can see. I share the ones that were for the flat and
+ignore the rest. Importing the same file twice, or one that overlaps last month's, adds nothing new,
+and two identical coffees on the same day still count as two.
+
+**Settle with a scan.** "You owe Lucy 23,48 €" comes with a GiroCode, the QR code German banking apps
+read for transfers. Name, IBAN, amount and reference are filled in, you check and send. If you'd
+rather type it, one tap copies the IBAN.
+
+**A history nobody can rewrite.** Anyone can fix a mistake, but fixing never erases. Edit an
+expense and the old version stays in the history, crossed out, with who changed it and when. The
+home card opens a timeline of every expense and payment with what each one did to your balance, so
+you can see exactly how you ended up owing 767,45 €.
+
+**Search that understands German.** "Einkauf" finds "Einkäufe", a typo like "Pizerria" still finds
+"Pizzeria Napoli", and you can filter by person, category, date or amount. Free, for the whole history.
+
+**Joining takes ten seconds.** I add a friend by name and send them a link on WhatsApp. They pick a
+username and password and they're in. Forgot your password? Anyone in your group can make you a
+one-time reset link.
+
+**It feels like an app.** It installs to the home screen, has a dark mode, categories that guess
+themselves from the shop name (REWE is groceries, DB is transport), monthly insights with your own
+share, and a page for every person showing where you two stand.
+
+<p>
+  <img src="docs/evidence/2026-10-26-person.png" alt="A person's page: where you two stand, with settle up, and the history between you" width="230">
+  <img src="docs/evidence/2026-10-26-insights.png" alt="Insights: spending per month for the group and for you, and per category" width="230">
+  <img src="docs/evidence/2026-10-26-search.png" alt="Search with a typo: Pizerria finds Pizzeria Napoli" width="230">
+</p>
+
+It's a personal project for friends, not a payment service. No money moves through it and it never
+talks to a bank API. People pay each other the normal way and record it here.
+
+## The parts I'm most proud of
+
+### Money is a ledger, not a table you can edit
+
+Underneath the friendly screens is an append-only, double-entry ledger. Every expense writes entries
+that add up to zero: the payer is credited the full amount, everyone who shares it is debited their
+part. Balances are never stored, they're always the sum of the entries.
+
+Deleting an expense writes reversing entries. Editing one reverses the old version and books the new
+one in a single transaction, so the group never sees both or neither. I didn't want this to rely on
+my Java code behaving, so PostgreSQL enforces it too. Triggers reject `UPDATE` and `DELETE` on the
+ledger, and the app connects as a database role that can only read and insert. On top of that, every
+entry carries a SHA-256 hash of the one before it, so `GET /groups/{id}/verify` shows if anyone with
+direct database access ever changed history.
+
+Splitting 10,00 € three ways is a classic place to lose a cent. Amounts are integer cents
+everywhere, the leftover cent goes to a fixed person (largest remainder, ties to the lower member id),
+and the web app runs a port of the same algorithm so the preview always matches what gets saved.
+That's checked against 5,000 random splits.
+
+### Pressing "Add" twice books once
+
+On a phone, a quick double tap can send the same request twice. Every create carries an
+`Idempotency-Key`, and the server stores it with a hash of the request body. The same key returns the
+first result instead of booking again, and the same key with a different body is refused. A
+concurrency test fires sixteen threads at it with one key and gets exactly one expense.
+
+I later found a hole in my own page. It generated a new key on every tap, so two taps looked like two
+different requests. Now each form keeps one key for as long as it's open, and every button ignores
+further taps while its action is running. Five fast taps on "Add" send one request.
+
+### Bank import that respects privacy
+
+Bank statements are personal data. The uploaded file is parsed in memory and never stored. Incoming
+and pending payments are dropped right away. Outgoing ones wait as candidates that only the account
+owner sees. Ignoring one deletes the payee and purpose text and keeps only a fingerprint, so a
+re-import still recognises it. Duplicates are found by a fingerprint of date, amount, payee and
+purpose plus an occurrence counter, which is what keeps those two identical coffees apart.
+
+### Accounts that are easy for friends and hard for strangers
+
+Friends sign in with a username and password (bcrypt). Every device gets its own session that can
+be signed out on its own or all at once. Invite and reset codes travel in the URL fragment
+(`#join=inv_…`), which browsers never send to the server, so they never land in a log. Sign-up is
+open, but one network can create at most five accounts an hour, and every group is visible to its
+members only, checked in one central rule before any controller runs.
+
+### Built to run in the cloud, and to cost nothing day to day
+
+The whole AWS setup is Terraform: VPC, RDS PostgreSQL, ECS Fargate, ECR, SQS, Lambda, S3,
+CloudWatch, SSM and least-privilege IAM. GitHub Actions deploys through OIDC, so there are no AWS keys
+anywhere. I skipped the NAT gateway and the load balancer on purpose, which saves about 55 USD a
+month. Database passwords come from ephemeral resources and never touch the Terraform state.
+
+Every expense, reversal and payment also writes an event through a transactional outbox. A
+publisher sends them to an SQS FIFO queue (one message group per expense group, so order holds), and
+a small Kotlin Lambda turns them into a monthly statement per group in S3. Failures go to a
+dead-letter queue with a CloudWatch alarm.
+
+Running all of that permanently would cost about 30 USD a month, which defeats the point of a
+project that exists so we don't pay for Splitwise Pro. So the app has two homes. On AWS I deploy,
+verify and tear it down again (a full demo session costs a few cents). For everyday use it runs on a
+free Oracle Cloud VM with Docker Compose and Caddy, which handles HTTPS by itself.
 
 ```mermaid
 flowchart LR
     dev[git push] --> ci[GitHub Actions CI<br/>tests with Testcontainers]
     ci -. "Deploy (manual)<br/>OIDC, no keys" .-> ecr[(ECR image)]
-    ecr --> ecs[ECS Fargate task<br/>Spring Boot API<br/>public subnet]
-    user[friends / scripts/demo.sh] -- "HTTPS or :8080<br/>Bearer token" --> ecs
+    ecr --> ecs[ECS Fargate task<br/>Spring Boot API + web app]
+    user[friends on their phones] -- "HTTPS<br/>Bearer token" --> ecs
     ecs -- "5432, only from the API's<br/>security group" --> rds[(RDS PostgreSQL 16<br/>private subnets)]
-    ssm[SSM Parameter Store<br/>DB passwords, registration code] -. at task start .-> ecs
+    ssm[SSM Parameter Store<br/>DB passwords] -. at task start .-> ecs
     ecs -- "outbox publisher<br/>FIFO, group order" --> sqs[[SQS ledger-events.fifo]]
     sqs --> lambda[Lambda statement-worker<br/>Kotlin]
     lambda --> s3[(S3 monthly statements)]
@@ -55,188 +135,165 @@ flowchart LR
     dlq --> alarms
 ```
 
-Everything on AWS is created by Terraform (`infra/`): VPC without NAT gateway, RDS, ECR, ECS,
-SQS, Lambda, S3, CloudWatch, SSM, IAM (least privilege, including the GitHub OIDC deploy role) and
-a budget alert. Every expense, reversal and payment also writes an event through a transactional
-outbox; a Kotlin Lambda turns the events into one JSON statement per group and month in S3.
-Passwords are generated by ephemeral resources and never stored in the Terraform state. The
-application connects to PostgreSQL as a role that can only read and insert, and change the few
-mutable tables. The reasoning behind each choice is in [docs/decisions.md](docs/decisions.md);
-dated evidence of what ran is in [docs/verification.md](docs/verification.md).
+### Tested like it handles money
 
-| Area | Technology |
+204 API tests run against a real PostgreSQL in Testcontainers, including the append-only rules, the
+database role's privileges, race conditions and an `EXPLAIN` check that search really uses its
+indexes on 50,000 expenses. The Kotlin worker has 13 tests against an SQS emulator and S3Mock, and
+the web app 79 unit tests. On every push, CI also builds the Docker image and runs a browser
+walkthrough in real Chrome: three friends in separate browsers, one invites, one joins by link, one
+signs up and pastes the link, then expenses, a bank import, a GiroCode, corrections and the final
+balances, on a desktop in light mode and a phone in dark mode.
+
+## Things that bit me along the way
+
+- The first AWS demo ran over plain HTTP, and adding an expense failed there while it worked
+  perfectly on my laptop. `crypto.randomUUID()` only exists on secure pages, so I build the
+  idempotency key from `crypto.getRandomValues()` when it's missing, with a test that simulates it.
+- PostgreSQL's `sum()` over a `bigint` column returns `numeric`, not `bigint`. Inside a `UNION`
+  that turned a perfectly good query into a type error.
+- After a tap on a phone, Chrome fires a "mouse leave" event, which closed my chart tooltip the
+  moment it opened. And lifting a finger after a long press sends a click to whatever is now under
+  it, which was the dimmed backdrop of the menu that had just opened, so it closed again at once.
+- The activity feed mixed timestamps from Java and from the database container. A few milliseconds
+  of clock drift were enough to shuffle the order, so now everything takes its time from one clock.
+
+## Tech
+
+| Area | What I used |
 |---|---|
-| Service | Java 21, Spring Boot 4.1, Spring Security (API tokens), Spring Data JPA, Flyway, springdoc-openapi |
+| Service | Java 21, Spring Boot 4.1, Spring Security, Spring Data JPA, Flyway, springdoc-openapi |
+| Data | PostgreSQL 16 with `tsvector` + GIN, `pg_trgm`, triggers, row locks, partial unique indexes |
+| Web app | React 19, TypeScript and Vite, with no UI, router or chart library. Installable, with a service worker that never caches API data, served from the same origin under a strict Content-Security-Policy |
 | Worker | Kotlin 2.4, kotlinx.serialization, AWS Lambda (java21, arm64), AWS SDK v2 |
-| Data | PostgreSQL 16: `tsvector` + GIN, `pg_trgm`, triggers, row locks, partial unique indexes |
-| Web app | React 19, TypeScript, Vite, no UI or chart library; installable (manifest, service worker that never caches API data); served by Spring Boot from the same origin, strict Content-Security-Policy |
-| Tests | JUnit, Testcontainers (PostgreSQL, ElasticMQ for SQS, S3Mock), concurrency tests, Vitest, a Playwright browser walkthrough in CI; 199 API + 13 worker + 62 web tests |
-| Infrastructure | Terraform 1.16, AWS provider 6: VPC, RDS, ECR, ECS Fargate, SQS, Lambda, S3, SSM, IAM, CloudWatch, SNS, Budgets |
-| Delivery | GitHub Actions (CI on every push, deploy via OIDC), Docker multi-stage image, non-root |
+| Infrastructure | Terraform 1.16 with the AWS provider 6, Docker Compose and Caddy for the free host |
+| Delivery | GitHub Actions (tests on every push, deploys through OIDC), multi-stage Docker image running as non-root |
+| Tests | JUnit 5, Testcontainers (PostgreSQL, ElasticMQ, S3Mock), Vitest, playwright-core |
 
-## Run locally
+Why I chose each of these, and what I decided against, is written down in
+[docs/decisions.md](docs/decisions.md). What actually ran, with dates and output, is in
+[docs/verification.md](docs/verification.md).
 
-Requirements: Java 21 and Docker. Maven is not needed; the wrapper `./mvnw` downloads the pinned version.
+## Run it yourself
 
-```bash
-cp .env.example .env          # then set your own passwords
-docker compose up --build     # API on http://localhost:8080, PostgreSQL on 127.0.0.1:5432 (DB_PORT in .env)
-scripts/demo.sh               # the whole story: two friends, imports, settle-up, verify, search
-```
-
-The web app is at http://localhost:8080: "Start a new group" creates your account, then invite
-friends from the Group page. Interactive API docs: http://localhost:8080/swagger-ui.html (register
-with `POST /users`, then use the token with "Authorize"). Tests: `cd api && ./mvnw verify`.
-
-## Deploy to AWS
-
-Needs Terraform, the AWS CLI with a login (`aws login`) and Docker. Region `eu-central-1`.
+You need Java 21 and Docker. Maven isn't needed, the wrapper downloads the pinned version.
 
 ```bash
-terraform -chdir=infra/bootstrap apply   # once: monthly budget with email alerts
-cp infra/app/terraform.tfvars.example infra/app/terraform.tfvars   # alarm email
-(cd statement-worker && ./mvnw -B package)   # the Lambda jar Terraform uploads
-terraform -chdir=infra/app apply         # network, database, registry, cluster (0 tasks), queues, Lambda
-scripts/push-image.sh                    # first image, tagged with the git commit
-terraform -chdir=infra/app apply -var api_image_tag=<tag> -var api_desired_count=1
+cp .env.example .env          # set your own passwords
+docker compose up --build     # app on http://localhost:8080
+scripts/demo.sh               # the whole story through the API: two friends, imports, settle-up, search
 ```
 
-After that, deployments run from GitHub: **Actions -> Deploy -> Run workflow**. The workflow waits
-for CI on the commit, assumes the deploy role through OIDC, pushes the image, rolls the service
-and smoke-tests it. Try it:
+Open http://localhost:8080, create an account, start a group and invite yourself from a second
+browser. The API docs are at http://localhost:8080/swagger-ui.html. Tests: `cd api && ./mvnw verify`,
+`cd web && npm test`.
 
-```bash
-BASE_URL="$(scripts/aws-api-url.sh)" \
-REGISTRATION_CODE="$(aws ssm get-parameter --name /splitledger/registration-code --with-decryption --query Parameter.Value --output text)" \
-scripts/demo.sh
-```
+### Host it for your friends for free
 
-When done: `terraform -chdir=infra/app destroy` (the budget alert in `infra/bootstrap` stays).
+`deploy/free-host/` runs the app, PostgreSQL and Caddy, which fetches a Let's Encrypt certificate
+by itself.
 
-## Costs
-
-The AWS stack is for showing that it runs, not for permanent hosting. Approximate eu-central-1
-prices:
-
-| AWS part | While running | If left on for a month |
-|---|---|---|
-| RDS PostgreSQL `db.t4g.micro`, 20 GB gp3 | ~0.02 USD/h | ~16 USD |
-| ECS Fargate 0.25 vCPU / 0.5 GB + public IPv4 | ~0.02 USD/h | ~14 USD |
-| SQS, Lambda, S3 statements | free tier | ~0 USD |
-| ECR, CloudWatch (logs, 4 alarms, 1 dashboard), SNS, SSM, IAM, Budgets | free tier | ~0 USD |
-| **Total** | **~0.04 USD/h** | **~30 USD** |
-| Avoided on purpose: NAT gateway / load balancer | | ~35 / ~20 USD |
-
-A demo session (apply, deploy, verify, destroy) costs a few cents. The account runs on the AWS
-Free plan (credits; the card is not charged), with a budget alert at 5 USD measured before credits.
-
-Measured: the stack ran for about six hours of building and testing on 2026-10-22, roughly
-0.30 USD, paid from the Free-plan credits.
-
-**Everyday use with friends costs nothing:** run it on an Oracle Cloud "Always Free" VM or any
-machine at home, as below. That split is the point: paying for hosting would defeat a project that
-exists to avoid paying for Splitwise Pro.
-
-## Free hosting for everyday use
-
-`deploy/free-host/` runs the API, PostgreSQL and Caddy, which fetches a Let's Encrypt certificate,
-so tokens only travel over HTTPS. Anyone can sign up (at most five new accounts per hour from one
-network); set `REGISTRATION_CODE` in `.env` to make sign-up need that code instead. Invite links
-always work without it.
-
-1. Get a free VM (for example Oracle Cloud Always Free, Ubuntu) and a domain pointing to it (a free
-   DuckDNS name works). Open ports 80 and 443 in the VM's firewall and security list.
+1. Get a free VM (I use Oracle Cloud Always Free with Ubuntu) and a domain pointing at it. A free
+   DuckDNS name works fine. Open ports 80 and 443.
 2. Install Docker, clone this repository, then:
    ```bash
    cd deploy/free-host
-   cp .env.example .env      # DOMAIN, two database passwords, optionally a registration code
+   cp .env.example .env      # your domain and two database passwords
    docker compose up -d --build
    ```
-3. `BASE_URL=https://<your-domain> scripts/demo.sh` checks it end to end (add
-   `REGISTRATION_CODE=<code>` if you set one).
-4. To update later: `git pull && docker compose up -d --build` in `deploy/free-host`. New database
-   migrations run when the API starts; take a backup first (below).
+3. Updating later is `git pull && docker compose up -d --build`. New database migrations run when
+   the app starts, so take a backup first:
+   `docker compose exec db pg_dump -U splitledger splitledger > backup.sql`.
 
-On a machine at home you can skip the domain and the open ports: a free Cloudflare Tunnel
-(`cloudflared`) forwards an HTTPS address to the API without exposing your network. Serverless
-platforms such as Cloudflare Workers cannot run this service itself (a JVM with PostgreSQL).
+Sign-up is open by default. Set `REGISTRATION_CODE` in `.env` if you'd rather have people enter a
+code first (invite links always work without it).
 
-Back up the database regularly, for example `docker compose exec db pg_dump -U splitledger splitledger > backup.sql`.
-
-Locked out, and nobody in your group can make you a reset link? As the host you can make one on
-the server: it is the same one-time link the app creates, with only its hash stored.
+If you lock yourself out and nobody in your group can make you a reset link, you can make one on the
+server. It's the same one-time link the app creates, with only its hash stored:
 
 ```bash
 docker compose exec -T db psql -U splitledger -d splitledger -c "select id, display_name from app_user;"
-CODE="rst_$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=
-')"
+CODE="rst_$(openssl rand -base64 32 | tr '+/' '-_' | tr -d '=\n')"
 HASH=$(printf '%s' "$CODE" | sha256sum | cut -d' ' -f1)
-docker compose exec -T db psql -U splitledger -d splitledger -c   "insert into password_reset (user_id, group_id, created_by_member_id, code_hash, expires_at)
+docker compose exec -T db psql -U splitledger -d splitledger -c \
+  "insert into password_reset (user_id, group_id, created_by_member_id, code_hash, expires_at)
    select m.user_id, m.group_id, m.id, '$HASH', now() + interval '1 hour' from member m where m.user_id = <id> limit 1;"
 echo "https://<your-domain>/#reset=$CODE"
 ```
 
+### Deploy it to AWS
+
+You need Terraform, the AWS CLI with a login (`aws login`) and Docker. Everything goes to
+`eu-central-1`.
+
+```bash
+terraform -chdir=infra/bootstrap apply   # once: a monthly budget with email alerts
+cp infra/app/terraform.tfvars.example infra/app/terraform.tfvars   # your alarm email
+(cd statement-worker && ./mvnw -B package)   # the Lambda jar Terraform uploads
+terraform -chdir=infra/app apply         # network, database, registry, cluster, queues, Lambda
+scripts/push-image.sh                    # the first image, tagged with the git commit
+terraform -chdir=infra/app apply -var api_image_tag=<tag> -var api_desired_count=1
+```
+
+After that, deployments run from GitHub under **Actions, Deploy, Run workflow**. The workflow waits
+for CI on that commit, assumes the deploy role through OIDC, pushes the image, rolls the service
+and smoke-tests it. When you're done, `terraform -chdir=infra/app destroy` removes everything except
+the budget alert.
+
+What it costs in `eu-central-1`:
+
+| AWS part | While running | Left on for a month |
+|---|---|---|
+| RDS PostgreSQL `db.t4g.micro`, 20 GB gp3 | ~0.02 USD/h | ~16 USD |
+| ECS Fargate 0.25 vCPU / 0.5 GB and a public IPv4 | ~0.02 USD/h | ~14 USD |
+| SQS, Lambda, S3, ECR, CloudWatch, SNS, SSM, IAM, Budgets | free tier | ~0 USD |
+| **Total** | **~0.04 USD/h** | **~30 USD** |
+| Avoided on purpose: NAT gateway, load balancer | | ~35 and ~20 USD |
+
+The longest session so far was about six hours of building and testing on 2026-10-22, roughly
+0.30 USD.
+
 ## API
 
-Every request except registration, health and the API docs needs `Authorization: Bearer <token>`.
-Everything under `/groups/{id}` is only for members of that group (403 otherwise).
+Everything except signing up, signing in, invite and reset links, health and the API docs needs
+`Authorization: Bearer <token>`. Everything under `/groups/{id}` is for members of that group only.
 
-| Method and path | Purpose |
+| Method and path | What it does |
 |---|---|
-| `POST /users`, `GET /me` | Register (returns the API token once); your groups |
+| `POST /users`, `GET /users/registration` | Create an account (with username and password, or an API token for scripts), and whether sign-up needs a code |
+| `POST /sessions`, `POST /logout`, `POST /me/sessions/revocation` | Sign in on a device, sign out of it, sign out everywhere |
+| `GET /me`, `PUT /me/username`, `PUT /me/password` | Your account and groups, change username or password |
+| `POST /invitations/preview`, `POST /invitations/signup`, `POST /invitations/accept` | What an invite link is for, sign up through it, or join with an existing account |
 | `POST /groups`, `GET /groups/{id}` | Create a group (you become its first member) and read it |
-| `POST /groups/{id}/members`, `GET /groups/{id}/members` | Add a friend (returns a one-time invite code) and list members |
-| `POST /invitations/accept` | Link your account to the member the invite code belongs to |
-| `PUT /groups/{id}/members/me/bank-details` | Set your IBAN/BIC (validated with ISO 13616 mod-97) |
-| `POST /groups/{id}/expenses` | Create an expense; requires an `Idempotency-Key` header |
-| `GET /groups/{id}/expenses/{expenseId}` | Read an expense with its shares |
-| `POST /groups/{id}/expenses/{expenseId}/reversal` | Delete: reversing entries cancel the expense (once); the history shows who |
-| `POST /groups/{id}/expenses/{expenseId}/correction` | Edit: reverses the old version and creates the new one in one step (`Idempotency-Key`) |
-| `GET /groups/{id}/expenses/search?q=&member=&from=&to=&min=&max=&limit=&cursor=` | Search descriptions, notes and bank purpose texts; filters; keyset pagination |
-| `POST /groups/{id}/imports` | Upload your bank statement (multipart `file`); returns new / duplicate / skipped counts |
-| `GET /groups/{id}/bank-transactions` | Your expense candidates (only you see your bank data) |
-| `POST /groups/{id}/bank-transactions/{tid}/confirmation`, `.../ignore` | Share a candidate (payer, amount, date default to the bank's values), or drop it |
-| `GET /groups/{id}/balances` | Net balance per member; positive means the group owes them |
-| `GET /groups/{id}/debts` | Who owes whom, pair by pair (adds up to the balances) |
-| `GET /groups/{id}/settlement` | The fewest transfers that settle everyone (greedy), with the receiver's IBAN |
-| `GET /groups/{id}/settlement/girocode?from=&to=&amount=` | GiroCode PNG (EPC069-12) for a transfer between two members |
-| `POST /groups/{id}/payments`, `GET /groups/{id}/payments` | Record a settle-up payment (`Idempotency-Key`) and list them |
-| `POST /groups/{id}/payments/{paymentId}/reversal` | Undo a payment recorded by mistake (once); it stays listed as undone |
-| `GET /groups/{id}/verify` | Recompute the hash chain; report the first broken entry and the head hash |
+| `POST /groups/{id}/members`, `GET /groups/{id}/members` | Add a friend (returns their invite code) and list everyone |
+| `POST /groups/{id}/members/{memberId}/invitation` | A fresh invite link that replaces the old one |
+| `POST /groups/{id}/members/{memberId}/password-reset`, `POST /password-resets` | A one-time reset link for a groupmate, and using it |
+| `PUT /groups/{id}/members/me/bank-details` | Your IBAN and BIC (checked with ISO 13616 mod-97) |
+| `POST /groups/{id}/expenses`, `GET /groups/{id}/expenses/{expenseId}` | Add an expense (`Idempotency-Key` required) and read it with everyone's share |
+| `POST /groups/{id}/expenses/{expenseId}/correction`, `.../reversal` | Edit (old version reversed, new one booked) or delete, both recorded with who did it |
+| `GET /groups/{id}/expenses/search` | Full-text and typo search with filters for person, category, dates and amounts, keyset pagination |
+| `POST /groups/{id}/imports`, `GET /groups/{id}/bank-transactions` | Upload your bank statement, see your private candidates |
+| `POST /groups/{id}/bank-transactions/{tid}/confirmation`, `.../ignore` | Share a candidate with the group, or drop it |
+| `GET /groups/{id}/balances`, `GET /groups/{id}/debts` | Net balance per person, and who owes whom pair by pair |
+| `GET /groups/{id}/settlement`, `.../settlement/girocode` | Few transfers that settle everyone (greedy), and the GiroCode PNG for one |
+| `POST /groups/{id}/payments`, `GET /groups/{id}/payments`, `.../payments/{paymentId}/reversal` | Record a payment (`Idempotency-Key`), list them, undo one |
+| `GET /groups/{id}/activity` | The timeline, each entry with what it did to your balance |
+| `GET /groups/{id}/insights?months=6` | Spending per month, category and payer |
+| `GET /groups/{id}/verify` | Recompute the hash chain and report the first broken entry |
 
-Amounts are integer cents. Split modes: `EQUAL`, `EXACT` (cents per person) and `SHARES` (units per
-person). Errors are RFC 9457 problem details; every response carries an `X-Request-Id` that also
-appears in the logs.
+Amounts are integer cents. Splits can be equal, exact amounts or shares. Errors come back as RFC 9457
+problem details, and every response has an `X-Request-Id` that also appears in the logs.
 
-## Bank data: assumptions and privacy
+## About the bank import
 
-- **The importer reads the Sparkasse "CSV-CAMT" export** from online banking (semicolon-separated,
-  Windows-1252, decimal commas, `dd.mm.yy` dates, columns such as `Buchungstag`,
-  `Verwendungszweck`, `Beguenstigter/Zahlungspflichtiger`, `Kontonummer/IBAN`, `Betrag`). It was
-  first built against the published layout and then checked with a real export of my Sparkasse
-  KölnBonn account (CSV-CAMT, 2026-10-23), which imported without changes. The files in
-  `samples/` and the tests stay synthetic: invented names and IBANs with a bank code no German bank
-  has. Real statements are never committed. The parser sits behind an interface so other banks
-  (and ISO 20022 CAMT.053) can be added.
-- Names and IBANs are personal data. The uploaded file is parsed in memory and never stored; incoming
-  and pending payments are not stored at all. Outgoing payments wait as candidates that only the
-  account owner can see. Confirming one makes it a shared expense; ignoring one deletes its
-  counterparty and purpose text and keeps only a fingerprint, date and amount, so a re-import still
-  recognizes it. Each member enters their own IBAN; nobody sets someone else's.
+The importer reads the "CSV-CAMT" export from Sparkasse online banking: semicolon-separated,
+Windows-1252, decimal commas, `dd.mm.yy` dates. I built it against the published layout first and
+then checked it with a real export from my own Sparkasse account, which imported without changes.
+The files in `samples/` and every test use made-up names and IBANs with a bank code no German bank
+has. Real statements never go into the repository. The parser sits behind an interface, so another
+bank's format or ISO 20022 CAMT.053 can be added next to it.
 
-## Status
+## What's next
 
-| Part | State |
-|---|---|
-| Ledger core, idempotent expenses, balances | done (day 1) |
-| Hash chain, reversals, append-only enforcement, search | done (day 2) |
-| API tokens and membership checks, Sparkasse CSV import, settle-up, OpenAPI, demo script | done (day 3) |
-| AWS with Terraform, least-privilege IAM and database roles, budget alert | done (day 4) |
-| GitHub OIDC deploy pipeline, JSON logs, CloudWatch alarms and dashboard, free-host setup | done (day 5) |
-| Transactional outbox, SQS FIFO with DLQ, Kotlin Lambda writing monthly statements to S3 | done (day 6) |
-| GiroCode, web page with splits, history, who owes whom; browser test in CI | done (day 7) |
-| Edit, delete and undo with an audit trail; sharing a bank payment through the form; real Sparkasse export checked | done (2026-10-23) |
-| CAMT.053 import; Lambda deployment through the pipeline; remote Terraform state | later |
-
-The AWS stack was destroyed after the evidence was recorded; `infra/app` recreates it in about
-ten minutes. "Used with friends" will only be claimed after a real month of use.
+CAMT.053 import, so it works with more banks. Deploying the Lambda through the pipeline as well,
+and keeping the Terraform state remotely instead of on my laptop.

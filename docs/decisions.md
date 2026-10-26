@@ -569,3 +569,21 @@ Behind Caddy the client's address comes from `X-Forwarded-For`, which Tomcat acc
 proxies in private networks (`server.forward-headers-strategy: native`), so a client cannot fake its
 address by sending the header. The registration code stays available: when it is set, sign-up needs
 it again and the page shows the field (`GET /users/registration`).
+
+## 43. Shaped by use on a phone (2026-10-26)
+
+After a day of real use on an iPhone the page changed in many small ways. The ones with a reason
+worth keeping:
+
+- **One screen per question.** The Activity tab is the full history (search, filters, payments,
+  edit and delete). The home card opens "How it added up", only expenses and payments, each with
+  what it did to your balance, computed from your own ledger entries, so the entries add up to
+  the card's number. Member events stay out of it because they move no money.
+- **A page per person,** with an address of its own (`#/g/12/member/34`), so the phone's back
+  gesture works.
+- **Gestures behave like native apps.** Sheets close on a clear swipe down (a third of their height
+  or a fast flick) and spring back otherwise. A gesture's direction is decided after its first 8px,
+  so swiping through the categories never drags the sheet. Press and hold opens edit and delete.
+  Hover colours apply only to a mouse, because on touch screens they stick after a tap.
+- **Double taps book once.** Forms keep one Idempotency-Key while open, and every action ignores
+  taps while it runs (see decision 3 for the server side).

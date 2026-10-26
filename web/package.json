@@ -2,7 +2,7 @@
   "name": "splitledger-web",
   "private": true,
   "version": "0.1.0",
-  "description": "Small page for friends: balances, expenses, bank import, search and settle-up with GiroCode",
+  "description": "SplitLedger web app: shared expenses for friends, bank import, search, insights and settle-up with GiroCode",
   "type": "module",
   "scripts": {
     "dev": "vite",

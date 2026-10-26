@@ -631,3 +631,10 @@ effect after the next render): the group screen's changes (`run`), all forms, in
 `web`: type check OK, 79 unit tests passed (new: `ui/once.test.ts`), build OK. In Chrome at 390×844
 against the local API: five fast taps on "Add" sent 1 request and booked 1 expense; five fast taps
 on "Mark as received" recorded 1 payment.
+
+## 2026-10-26: README, screenshots, category bars
+
+New README and screenshots (`docs/evidence/2026-10-26-*.png`), taken at 390×844 against the local
+API with three friends who joined through their invite links. Taking them showed the insights
+category bars had never been drawn: the coloured part was an inline `span`, which ignores `width`.
+Both bar elements are blocks now. `web`: 79 unit tests passed, build OK.
