@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { unreadCount } from '../activity';
 import { ApiError, type Api, type ExpenseHit, type Me, type SuggestedPayment } from '../api';
 import { useInstall } from '../install';
 import { groupHref, inviteCodeFrom, type Route, type Screen } from '../route';
 import { Icon, type IconName } from '../ui/Icon';
+import { useFormSubmit } from '../ui/once';
 import { Avatar, GroupMark, Sheet } from '../ui/parts';
 import { useToast } from '../ui/toast';
 import { AccountSheet } from './AccountSheet';
@@ -101,7 +102,12 @@ function GroupApp({ api, me, groupId, groupName, myMemberId, screen, memberId, n
   const [installDismissed, setInstallDismissed] = useState(() => readSeen(-1) !== null);
   const closeSheet = useCallback(() => setSheet(null), []);
 
+  // One change at a time: a second tap while a change is still running is ignored, whatever the
+  // button (delete, undo, ignore, save). The lock is a ref, so it holds before the next render.
+  const running = useRef(false);
   const run = useCallback(async (action: () => Promise<unknown>, success?: string) => {
+    if (running.current) return false;
+    running.current = true;
     try {
       await action();
       await reload();
@@ -111,6 +117,8 @@ function GroupApp({ api, me, groupId, groupName, myMemberId, screen, memberId, n
       if (err instanceof ApiError && err.status === 401) onSignOut(false);
       toast((err as Error).message, 'error');
       return false;
+    } finally {
+      running.current = false;
     }
   }, [reload, toast, onSignOut]);
 
@@ -231,8 +239,7 @@ function NewGroupForm({ api, onCreated }: { api: Api; onCreated: (groupId: numbe
   const toast = useToast();
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  const submit = useFormSubmit(async () => {
     setBusy(true);
     try {
       onCreated((await api.createGroup(name.trim())).id);
@@ -241,7 +248,7 @@ function NewGroupForm({ api, onCreated }: { api: Api; onCreated: (groupId: numbe
     } finally {
       setBusy(false);
     }
-  }
+  });
   return (
     <form onSubmit={submit} style={{ display: 'flex', gap: 8 }}>
       <input aria-label="Group name" placeholder="e.g. WG Kessenich, Lisbon trip" value={name} onChange={(e) => setName(e.target.value)}
@@ -256,8 +263,7 @@ function JoinGroupForm({ api, onJoined }: { api: Api; onJoined: (groupId: number
   const toast = useToast();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  const submit = useFormSubmit(async () => {
     const code = inviteCodeFrom(text);
     if (!code) {
       toast('Paste the invite link your friend sent, or the code in it (starts with inv_).', 'error');
@@ -271,7 +277,7 @@ function JoinGroupForm({ api, onJoined }: { api: Api; onJoined: (groupId: number
     } finally {
       setBusy(false);
     }
-  }
+  });
   return (
     <form onSubmit={submit} style={{ display: 'flex', gap: 8 }}>
       <input aria-label="Invite link or code" placeholder="Paste the invite link or code" value={text}

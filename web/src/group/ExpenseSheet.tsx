@@ -1,10 +1,11 @@
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import type { ExpenseBody, Member, SplitMode } from '../api';
 import { CATEGORIES, guessCategory, type Category } from '../categories';
 import { formatDate } from '../format';
-import { localToday } from '../ids';
+import { localToday, newIdempotencyKey } from '../ids';
 import { formatCents, parseEuroToCents } from '../money';
 import { distributeRest, splitEqually, splitProportionally, type Allocation } from '../split';
+import { useFormSubmit } from '../ui/once';
 import { Avatar, Field, Money, Sheet } from '../ui/parts';
 import { useGroup, type Draft } from './context';
 
@@ -117,8 +118,10 @@ export function ExpenseSheet({ draft, onClose }: { draft: Draft; onClose: () => 
     setExact(Object.fromEntries(members.map((m) => [m.id, formatPlain(filled.get(m.id) ?? 0)])));
   }
 
-  async function submit(e: FormEvent) {
-    e.preventDefault();
+  // One key for as long as the sheet is open: a second tap repeats the same request, which the
+  // server answers with the first expense instead of booking it again.
+  const [requestKey] = useState(newIdempotencyKey);
+  const submit = useFormSubmit(async () => {
     if (problem || total === null) return;
     const participants = mode === 'EQUAL'
       ? allocations.map((a) => ({ memberId: a.memberId }))
@@ -133,11 +136,11 @@ export function ExpenseSheet({ draft, onClose }: { draft: Draft; onClose: () => 
     const ok = draft.kind === 'bank'
       ? await run(() => api.confirm(groupId, draft.transaction.id, body), `Shared “${body.description}” with the group`)
       : draft.kind === 'edit'
-        ? await run(() => api.editExpense(groupId, draft.expense.id, body), 'Expense updated')
-        : await run(() => api.addExpense(groupId, body), 'Expense added');
+        ? await run(() => api.editExpense(groupId, draft.expense.id, body, requestKey), 'Expense updated')
+        : await run(() => api.addExpense(groupId, body, requestKey), 'Expense added');
     setBusy(false);
     if (ok) onClose();
-  }
+  });
 
   const title = draft.kind === 'bank' ? 'Share a bank payment' : draft.kind === 'edit' ? 'Edit expense' : 'Add expense';
   return (

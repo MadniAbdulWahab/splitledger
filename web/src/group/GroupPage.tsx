@@ -1,7 +1,8 @@
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { formatIban } from '../format';
 import { linkFor } from '../route';
 import { Icon } from '../ui/Icon';
+import { useFormSubmit, useSingleFlight } from '../ui/once';
 import { Avatar, Field, Sheet } from '../ui/parts';
 import { useToast } from '../ui/toast';
 import { useGroup } from './context';
@@ -21,7 +22,7 @@ export function useMemberLinks(): {
   const toast = useToast();
   const [link, setLink] = useState<LinkToSend | null>(null);
 
-  async function newLink(memberId: number, memberName: string, kind: 'join' | 'reset') {
+  const newLink = useSingleFlight(async (memberId: number, memberName: string, kind: 'join' | 'reset') => {
     try {
       const url = kind === 'join'
         ? linkFor('join', (await api.reissueInvitation(groupId, memberId)).inviteCode)
@@ -31,7 +32,7 @@ export function useMemberLinks(): {
     } catch (err) {
       toast((err as Error).message, 'error');
     }
-  }
+  });
 
   return { newLink, show: setLink, sheet: link && <SendLink link={link} onClose={() => setLink(null)} /> };
 }
@@ -45,8 +46,7 @@ export function GroupPage() {
   const [iban, setIban] = useState('');
   const me = data.members.find((m) => m.id === myMemberId);
 
-  async function invite(e: FormEvent) {
-    e.preventDefault();
+  const invite = useFormSubmit(async () => {
     const friend = name.trim();
     try {
       const added = await api.addMember(groupId, friend);
@@ -56,7 +56,7 @@ export function GroupPage() {
     } catch (err) {
       toast((err as Error).message, 'error');
     }
-  }
+  });
 
   return (
     <>

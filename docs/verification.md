@@ -619,3 +619,15 @@ from the member list on the Group page; the phone's back gesture returns to wher
 `web`: type check OK, 77 unit tests passed (new: the person route), build OK. In Chrome at 390×844
 against the local API: Ben's page from his tile (owes you 12,50 €, his expense listed), Kyle's page
 from the Group page (you owe 10,00 €), back returned to the Group page.
+
+## 2026-10-26: double taps book once
+
+Two layers. The add/edit sheet and the settle screen keep one Idempotency-Key for as long as they are
+open (it was a new key per tap, so two quick taps were two requests the server could not tell
+apart); a repeat is answered with the first result, also after a network timeout. And every action
+ignores further taps while it runs, with a lock set synchronously (a disabled button only takes
+effect after the next render): the group screen's changes (`run`), all forms, invite and reset links.
+
+`web`: type check OK, 79 unit tests passed (new: `ui/once.test.ts`), build OK. In Chrome at 390×844
+against the local API: five fast taps on "Add" sent 1 request and booked 1 expense; five fast taps
+on "Mark as received" recorded 1 payment.

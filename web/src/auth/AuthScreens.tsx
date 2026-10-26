@@ -3,6 +3,7 @@ import {
   Api, login, previewInvitation, previewReset, redeemReset, registerAccount, registrationPolicy, signUpWithInvitation,
   type InvitationPreview, type ResetPreview,
 } from '../api';
+import { useFormSubmit } from '../ui/once';
 import { Field, Guilloche } from '../ui/parts';
 
 /** "Ben Beispiel" -> "ben.beispiel": a username suggestion that fits the server's rule. */
@@ -23,15 +24,15 @@ function AuthFrame({ children }: { children: ReactNode }) {
   );
 }
 
+/** A form's submit with a busy flag and an error; a second tap while it runs does nothing. */
 function useSubmit(action: () => Promise<void>): [(e: FormEvent) => void, boolean, string | null] {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
+  const submit = useFormSubmit(async () => {
     setBusy(true);
     setError(null);
-    action().catch((err: Error) => setError(err.message)).finally(() => setBusy(false));
-  };
+    await action().catch((err: Error) => setError(err.message)).finally(() => setBusy(false));
+  });
   return [submit, busy, error];
 }
 

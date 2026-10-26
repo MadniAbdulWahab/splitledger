@@ -96,22 +96,24 @@ export class Api {
   /** Who owes whom, pair by pair. */
   debts = (g: number) => this.json<{ debts: SuggestedPayment[] }>('GET', `/groups/${g}/debts`);
 
-  // Every create sends a fresh Idempotency-Key, so a retried click never books twice.
-  addExpense = (g: number, body: ExpenseBody) =>
-    this.json('POST', `/groups/${g}/expenses`, body, { 'Idempotency-Key': newIdempotencyKey() });
+  // Creates send an Idempotency-Key: the same key twice books once, the server returns the first
+  // result. Forms pass one key for as long as they are open, so a double tap or a retry after a
+  // timeout cannot book twice; without one, every call gets a fresh key.
+  addExpense = (g: number, body: ExpenseBody, key = newIdempotencyKey()) =>
+    this.json('POST', `/groups/${g}/expenses`, body, { 'Idempotency-Key': key });
   getExpense = (g: number, id: number) => this.json<Expense>('GET', `/groups/${g}/expenses/${id}`);
   /** The old version stays in the history, crossed out; the body becomes the new version. */
-  editExpense = (g: number, id: number, body: ExpenseBody) =>
-    this.json('POST', `/groups/${g}/expenses/${id}/correction`, body, { 'Idempotency-Key': newIdempotencyKey() });
+  editExpense = (g: number, id: number, body: ExpenseBody, key = newIdempotencyKey()) =>
+    this.json('POST', `/groups/${g}/expenses/${id}/correction`, body, { 'Idempotency-Key': key });
   /** Reversing entries cancel it; the history keeps it crossed out with who deleted it. */
   deleteExpense = (g: number, id: number) => this.json('POST', `/groups/${g}/expenses/${id}/reversal`);
   undoPayment = (g: number, id: number) => this.json('POST', `/groups/${g}/payments/${id}/reversal`);
   /** Recorded settle-up payments, newest first. */
   payments = (g: number) => this.json<PaymentRecord[]>('GET', `/groups/${g}/payments`);
-  recordPayment = (g: number, p: SuggestedPayment) =>
+  recordPayment = (g: number, p: SuggestedPayment, key = newIdempotencyKey()) =>
     this.json('POST', `/groups/${g}/payments`,
       { fromMemberId: p.fromMemberId, toMemberId: p.toMemberId, amountCents: p.amountCents },
-      { 'Idempotency-Key': newIdempotencyKey() });
+      { 'Idempotency-Key': key });
 
   /** Without q: the whole history, newest first. Pass nextCursor to get the following page. */
   /** member: only expenses that person paid or shares. */

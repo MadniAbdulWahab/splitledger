@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { SuggestedPayment } from '../api';
 import { formatIban } from '../format';
+import { newIdempotencyKey } from '../ids';
+import { useSingleFlight } from '../ui/once';
 import { Icon } from '../ui/Icon';
 import { Avatar, Empty, Money, Sheet } from '../ui/parts';
 import { useGroup } from './context';
@@ -117,12 +119,14 @@ function PaymentDetail({ debt, onBack, onPaid }: { debt: SuggestedPayment; onBac
   const myIban = data.members.find((m) => m.id === myMemberId)?.iban ?? null;
   const receiverIban = theyOweMe ? myIban : debt.toIban;
 
-  async function markPaid() {
+  // Like the expense sheet: one key per screen and a lock, so a double tap records one payment.
+  const [requestKey] = useState(newIdempotencyKey);
+  const markPaid = useSingleFlight(async () => {
     setBusy(true);
-    const ok = await run(() => api.recordPayment(groupId, debt));
+    const ok = await run(() => api.recordPayment(groupId, debt, requestKey));
     setBusy(false);
     if (ok) onPaid();
-  }
+  });
 
   return (
     <div className="stack">

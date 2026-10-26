@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useState } from 'react';
 import type { Api, Me } from '../api';
 import { useInstall } from '../install';
 import { Icon } from '../ui/Icon';
+import { useFormSubmit } from '../ui/once';
 import { Avatar, Field, Sheet } from '../ui/parts';
 import { useToast } from '../ui/toast';
 
@@ -39,8 +40,7 @@ export function AccountSheet({ api, me, avatarId, onChanged, onSignOut, onClose 
   const [next, setNext] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  async function save(e: FormEvent) {
-    e.preventDefault();
+  const save = useFormSubmit(async () => {
     setError(null);
     try {
       if (username.trim() && username.trim().toLowerCase() !== me.username) await api.changeUsername(username.trim());
@@ -52,7 +52,7 @@ export function AccountSheet({ api, me, avatarId, onChanged, onSignOut, onClose 
     } catch (err) {
       setError((err as Error).message);
     }
-  }
+  });
 
   return (
     <Sheet title="Your account" onClose={onClose}>
