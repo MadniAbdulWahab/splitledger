@@ -17,10 +17,13 @@
 .group-card .guilloche { position: absolute; inset: auto -40px -60px auto; width: 340px; height: 340px; z-index: -1; color: var(--card-line); opacity: 0.38; }
 .group-card .card-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .group-card .card-name { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Gold like a bank card's chip, but a button: Pay or Request opens settle-up with the GiroCode. */
 .group-card .card-chip {
-  flex: none; width: 38px; height: 28px; border-radius: 7px;
-  background: linear-gradient(135deg, #e9d48f, #b8952a); opacity: 0.9;
+  flex: none; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+  border-radius: 10px; background: linear-gradient(135deg, #f0dc98, #c29d36); color: #2b2206;
+  font-size: 14px; font-weight: 700; box-shadow: 0 2px 8px rgb(0 0 0 / 25%);
 }
+.group-card .card-chip:active { transform: scale(0.96); }
 .group-card .card-label { color: var(--card-muted); font-size: 14px; margin-bottom: 6px; }
 .group-card .card-sub { color: var(--card-muted); }
 .group-card .card-bottom { display: flex; align-items: center; gap: 10px; color: var(--card-muted); font-size: 14px; min-height: 30px; }
@@ -143,20 +146,15 @@ details.more summary { cursor: pointer; color: var(--giro); font-weight: 600; li
 details.more summary::-webkit-details-marker { display: none; }
 
 /* ---------- Sheets: bottom sheet on phones, dialog on wide screens ---------- */
-/*
- * The dimmed backdrop is the scrolling area, not the sheet: on an iPhone the bottom of a sheet can sit
- * behind Safari's toolbar, where a sheet with its own scroll area could not be scrolled to its end.
- */
+/* The sheet sits at the bottom and scrolls inside itself; swiping it down closes it (ui/swipe.ts). */
 .sheet-backdrop {
   position: fixed; inset: 0; z-index: 40; background: rgb(15 16 32 / 45%);
-  overflow-y: auto; overscroll-behavior: contain;
-  display: flex; flex-direction: column; align-items: center;
-  padding-top: calc(24px + env(safe-area-inset-top)); animation: fade 160ms ease;
+  display: flex; align-items: flex-end; justify-content: center; animation: fade 160ms ease;
 }
 .sheet {
-  margin-top: auto; flex: none; width: 100%; max-width: 560px; overflow-x: hidden;
+  width: 100%; max-width: 560px; max-height: 92dvh; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain;
   background: var(--surface); border-radius: 24px 24px 0 0; box-shadow: var(--shadow-sheet);
-  padding: 8px 20px calc(48px + env(safe-area-inset-bottom)); animation: rise 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  padding: 8px 20px calc(24px + env(safe-area-inset-bottom)); animation: rise 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .sheet-handle { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 4px auto 12px; }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
@@ -164,8 +162,8 @@ details.more summary::-webkit-details-marker { display: none; }
 @keyframes rise { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
 @keyframes fade { from { opacity: 0; } }
 @media (min-width: 640px) {
-  .sheet-backdrop { padding: 24px; }
-  .sheet { margin: auto 0; border-radius: 24px; padding: 20px 28px 28px; }
+  .sheet-backdrop { align-items: center; padding: 24px; }
+  .sheet { border-radius: 24px; padding: 20px 28px 28px; }
   .sheet-handle { display: none; }
 }
 

@@ -20,6 +20,7 @@ const PATHS = {
   upload: <><path d="M12 15V3M7 8l5-5 5 5" /><path d="M4 15v5h16v-5" /></>,
   install: <><path d="M12 3v12M7 10l5 5 5-5" /><path d="M5 21h14" /></>,
   person: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
+  qr: <><rect x="4" y="4" width="6" height="6" rx="1" /><rect x="14" y="4" width="6" height="6" rx="1" /><rect x="4" y="14" width="6" height="6" rx="1" /><path d="M14 14h2v2h-2zM18 18h2v2h-2zM14 18v2M18 14h2" /></>,
 } satisfies Record<string, ReactNode>;
 
 export type IconName = keyof typeof PATHS;

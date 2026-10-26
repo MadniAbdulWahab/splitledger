@@ -1,8 +1,9 @@
-import { useEffect, useId, type ReactNode } from 'react';
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { initials, memberColour } from '../avatar';
 import { categoryOf } from '../categories';
 import { formatCents } from '../money';
 import { Icon } from './Icon';
+import { useSwipeToClose } from './swipe';
 
 /**
  * An amount with the euros in front and the cents and € sign set back, e.g. 87,00 €. The spans
@@ -70,9 +71,11 @@ export function SkeletonRows({ count = 3 }: { count?: number }) {
   );
 }
 
-/** Bottom sheet on phones, a dialog on wide screens. Escape and a tap outside close it. */
+/** Bottom sheet on phones, a dialog on wide screens. Escape, a tap outside and a swipe down close it. */
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const titleId = useId();
+  const sheet = useRef<HTMLDivElement>(null);
+  useSwipeToClose(sheet, onClose);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -86,7 +89,7 @@ export function Sheet({ title, onClose, children }: { title: string; onClose: ()
 
   return (
     <div className="sheet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="sheet" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+      <div ref={sheet} className="sheet" role="dialog" aria-modal="true" aria-labelledby={titleId}>
         <div className="sheet-handle" />
         <div className="sheet-head">
           <h2 id={titleId}>{title}</h2>

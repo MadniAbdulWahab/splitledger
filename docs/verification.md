@@ -558,3 +558,14 @@ iOS date fields look like the other inputs, and the add button is a raised round
 against the local API: both card colours, the add sheet scrolled to its end with the date field and
 button reachable, the feed sheet from the card. The walkthrough (`web/e2e`) was updated for the new
 names and runs in CI.
+
+## 2026-10-26: swipe down to close sheets, Pay/Request on the card
+
+Sheets are back at the bottom with their own scrolling (the backdrop-scrolling of the morning was a
+misunderstanding) and close with a swipe down that starts when their content is at the top. The
+card's gold chip is now a button: "Pay" when you owe, "Request" when you are owed, opening
+settle-up (with the GiroCode when one person is involved); hidden when settled.
+
+`web`: type check OK, 67 unit tests passed (new: `ui/swipe.test.ts`), build OK. In Chrome at
+390×844 with real touch events (CDP): a 220px swipe closes the add sheet, a slow 60px drag springs
+back, "Pay" opens "You pay Ben".

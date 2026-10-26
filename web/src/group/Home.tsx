@@ -26,7 +26,17 @@ export function Home({ banners, unread, onOpenFeed }: { banners?: ReactNode; unr
         role="button" tabIndex={0} aria-label="Your balance; show what happened in the group"
         onClick={onOpenFeed} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenFeed(); } }}>
         <Guilloche />
-        <div className="card-top"><span className="card-name">{groupName}</span><span className="card-chip" aria-hidden="true" /></div>
+        <div className="card-top">
+          <span className="card-name">{groupName}</span>
+          {/* The card's "chip" pays: straight to the GiroCode when only one person is involved. */}
+          {loaded && myBalance !== 0 && (
+            <button type="button" className="card-chip"
+              onClick={(e) => { e.stopPropagation(); openSettle(people.length === 1 ? (myBalance < 0 ? iOwe : owesMe)[0] : undefined); }}
+              onKeyDown={(e) => e.stopPropagation()}>
+              <Icon name="qr" small />{myBalance < 0 ? 'Pay' : 'Request'}
+            </button>
+          )}
+        </div>
         <div>
           <p className="card-label">{myBalance > 0 ? 'You get back' : myBalance < 0 ? 'You owe' : 'Your balance'}</p>
           {!loaded ? <span className="money big">&nbsp;</span>
