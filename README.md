@@ -25,14 +25,14 @@ payment shows up as a candidate that only I can see. I share the ones that were 
 ignore the rest. Importing the same file twice, or one that overlaps last month's, adds nothing new,
 and two identical coffees on the same day still count as two.
 
-**Settle with a scan.** "You owe Lucy 23,48 €" comes with a GiroCode, the QR code German banking apps
-read for transfers. Name, IBAN, amount and reference are filled in, you check and send. If you'd
-rather type it, one tap copies the IBAN.
+**Settle with a scan.** "Lucy owes you 29,48 €" comes with a GiroCode, the QR code German banking apps
+read for transfers. Lucy scans it, finds name, IBAN, amount and reference already filled in, checks
+and sends. If she'd rather type it, one tap copies the IBAN.
 
 **A history nobody can rewrite.** Anyone can fix a mistake, but fixing never erases. Edit an
 expense and the old version stays in the history, crossed out, with who changed it and when. The
 home card opens a timeline of every expense and payment with what each one did to your balance, so
-you can see exactly how you ended up owing 767,45 €.
+you can see exactly how you ended up owing 749,45 €.
 
 **Search that understands German.** "Einkauf" finds "Einkäufe", a typo like "Pizerria" still finds
 "Pizzeria Napoli", and you can filter by person, category, date or amount. Free, for the whole history.
@@ -46,7 +46,11 @@ themselves from the shop name (REWE is groceries, DB is transport), monthly insi
 share, and a page for every person showing where you two stand.
 
 <p>
+  <img src="docs/evidence/2026-10-26-how-it-added-up.png" alt="How it added up: every expense and payment with what it did to your balance" width="230">
+  <img src="docs/evidence/2026-10-26-activity.png" alt="Activity: the whole history by month, with a deleted expense crossed out and who deleted it" width="230">
   <img src="docs/evidence/2026-10-26-person.png" alt="A person's page: where you two stand, with settle up, and the history between you" width="230">
+</p>
+<p>
   <img src="docs/evidence/2026-10-26-insights.png" alt="Insights: spending per month for the group and for you, and per category" width="230">
   <img src="docs/evidence/2026-10-26-search.png" alt="Search with a typo: Pizerria finds Pizzeria Napoli" width="230">
 </p>

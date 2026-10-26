@@ -61,7 +61,10 @@ export function ActivityFeed({ onSeen }: { onSeen: () => void }) {
                     </span>
                   </span>
                   {mine
-                    ? <Money cents={a.myChangeCents!} signed className={a.myChangeCents! > 0 ? 'owed' : 'owe'} />
+                    // Being paid back lowers what you are owed, but settling up is not a loss: payments stay
+                    // neutral, green and red are for expenses.
+                    ? <Money cents={a.myChangeCents!} signed
+                      className={a.kind.startsWith('PAYMENT') ? 'muted' : a.myChangeCents! > 0 ? 'owed' : 'owe'} />
                     : a.amountCents !== null && <Money cents={a.amountCents} className="muted" />}
                 </>
               );
