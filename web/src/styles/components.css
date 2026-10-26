@@ -91,11 +91,14 @@
 }
 .person-tile.owed { background: var(--owed-soft); border-color: color-mix(in srgb, var(--owed) 30%, transparent); }
 .person-tile.owe { background: var(--owe-soft); border-color: color-mix(in srgb, var(--owe) 30%, transparent); }
+/* Dashed only for someone with nothing open who has not joined; the tile says so in words. With an
+   open amount the outline stays solid and a small "Invited" label carries the same information. */
 .person-tile.pending { border-style: dashed; }
 /* The tint says who owes whom; the name stays in normal ink, only the amount is coloured. */
 .person-tile.owed, .person-tile.owe { color: var(--ink); }
 button.person-tile:active { transform: scale(0.98); }
 .person-top { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.person-top .pill { flex: none; margin-left: auto; } /* the name shortens, the label stays whole */
 .person-name { font-weight: 650; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* "owes you" and the amount on one line. */
 .person-amount { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }

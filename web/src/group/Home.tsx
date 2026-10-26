@@ -138,6 +138,7 @@ export function People() {
                   <span className="person-top">
                     <Avatar id={m.id} name={m.displayName} size="small" />
                     <span className="person-name">{m.displayName}</span>
+                    {!m.joined && debt && <span className="pill quiet">Invited</span>}
                   </span>
                   {debt ? (
                     <span className="person-amount">
@@ -151,7 +152,7 @@ export function People() {
               );
               return (
                 <li key={m.id}>
-                  <button type="button" className={`person-tile ${tone} ${m.joined ? '' : 'pending'}`} onClick={() => openMember(m.id)}>
+                  <button type="button" className={`person-tile ${tone} ${m.joined || debt ? '' : 'pending'}`} onClick={() => openMember(m.id)}>
                     {content}
                   </button>
                 </li>
