@@ -598,3 +598,13 @@ are tiles in two columns, tinted by who owes whom, unlike the expense lists.
 
 `web`: type check OK, 73 unit tests passed (`ui/swipe.test.ts`: a third of a tall sheet, a quick
 60px pull springs back), build OK. Checked at 390×844 in light and dark mode against the local API.
+
+## 2026-10-26: sideways swipes stay sideways
+
+Swipe-to-close now locks a gesture's direction after its first 8px, as native apps do: a sideways
+swipe over the categories never moves the sheet, even when the finger drifts down; only a clearly
+downward gesture can. Sideways rows keep their overscroll to themselves.
+
+`web`: type check OK, 76 unit tests passed (new: `lockAxis`), build OK. In Chrome at 390×844 with
+real touch events: a leftward swipe over the categories that drifted 35px down scrolled them by
+291px, the sheet moved 0px and stayed open; a swipe down from the sheet's head closed it.

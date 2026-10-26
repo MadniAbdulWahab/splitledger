@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { CLOSE_DISTANCE, FLICK_MIN_DISTANCE, shouldClose } from './swipe';
+import { CLOSE_DISTANCE, FLICK_MIN_DISTANCE, lockAxis, shouldClose } from './swipe';
+
+describe('lockAxis', () => {
+  it('waits for a few pixels before deciding', () => {
+    expect(lockAxis(3, 4)).toBeNull();
+  });
+
+  it('keeps a sideways swipe sideways even when the finger drifts down', () => {
+    expect(lockAxis(30, 12)).toBe('x');
+    expect(lockAxis(-20, 18)).toBe('x'); // nearly diagonal still counts as sideways
+  });
+
+  it('is vertical only when clearly more down than sideways', () => {
+    expect(lockAxis(4, 20)).toBe('y');
+  });
+});
 
 describe('shouldClose', () => {
   it('closes after a long enough drag, however slow', () => {
