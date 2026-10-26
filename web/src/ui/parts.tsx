@@ -21,7 +21,7 @@ export function Money({ cents, big, signed, className = '' }: { cents: number; b
   );
 }
 
-export function Avatar({ id, name, size }: { id: number; name: string; size?: 'small' | 'medium' | 'large' }) {
+export function Avatar({ id, name, size }: { id: number; name: string; size?: 'small' | 'large' }) {
   return (
     <span className={`avatar ${size ?? ''}`} style={{ background: memberColour(id) }} title={name} aria-hidden="true">
       {initials(name)}

@@ -136,7 +136,7 @@ export function People() {
               const content = (
                 <>
                   <span className="person-top">
-                    <Avatar id={m.id} name={m.displayName} size="medium" />
+                    <Avatar id={m.id} name={m.displayName} size="small" />
                     <span className="person-name">{m.displayName}</span>
                   </span>
                   {debt ? (
