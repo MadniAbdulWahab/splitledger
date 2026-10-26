@@ -22,10 +22,15 @@ import java.util.List;
 @Service
 class ActivityService {
 
-    /** One timeline entry. Which fields are set depends on {@code kind}; {@code id} is unique in the feed. */
+    /**
+     * One timeline entry. Which fields are set depends on {@code kind}; {@code id} is unique in the feed.
+     * {@code myChangeCents} is what the entry did to the reader's balance (positive: the group owes
+     * them more); null for entries that do not move money or do not involve them. Summed over the
+     * whole feed it is the reader's balance.
+     */
     record ActivityItem(String id, String kind, Instant at, Long actorMemberId, Long expenseId, Long paymentId,
                         Long memberId, String description, Long amountCents, String category,
-                        Long fromMemberId, Long toMemberId) {
+                        Long fromMemberId, Long toMemberId, Long myChangeCents) {
     }
 
     record Page(List<ActivityItem> items, String nextCursor) {
@@ -50,51 +55,65 @@ class ActivityService {
         }
     }
 
+    /** The reader's ledger entries for one expense or payment, as booked; sum() of bigint is numeric, hence the cast. */
+    private static final String MY_EXPENSE = "(select sum(le.amount_cents)::bigint from ledger_entry le "
+            + "where le.kind = 'EXPENSE' and le.reference_id = %s and le.member_id = :me)";
+    private static final String MY_PAYMENT = "(select sum(le.amount_cents)::bigint from ledger_entry le "
+            + "where le.kind = 'PAYMENT' and le.reference_id = %s and le.member_id = :me)";
+
     // Every branch has the same columns; the first one casts its nulls so PostgreSQL knows the types.
     private static final String FEED = """
             select 'GROUP_CREATED' as kind, g.created_at as at, 'G' || g.id as id,
                    (select min(m.id) from member m where m.group_id = g.id) as actor,
                    null::bigint as expense_id, null::bigint as payment_id, null::bigint as member_id,
                    g.name::text as description, null::bigint as amount_cents, null::text as category,
-                   null::bigint as from_member_id, null::bigint as to_member_id
+                   null::bigint as from_member_id, null::bigint as to_member_id, null::bigint as my_change
             from expense_group g where g.id = :groupId
             union all
             -- As first entered; the new version of an edited expense appears as EXPENSE_EDITED instead.
             select 'EXPENSE_ADDED', e.created_at, 'E' || e.id, e.created_by, e.id, null, e.payer_id,
-                   e.description, e.amount_cents, e.category, null, null
+                   e.description, e.amount_cents, e.category, null, null, %1$s
             from expense e
             where e.group_id = :groupId
               and not exists (select 1 from correction c where c.replacement_expense_id = e.id)
             union all
             -- EXPENSE_EDITED, EXPENSE_DELETED or PAYMENT_UNDONE. Edits point to the new version,
-            -- deletions to the deleted expense, undos to the payment.
+            -- deletions to the deleted expense, undos to the payment. A deletion or undo takes back what
+            -- the original did; an edit changes the balance by the difference between the versions.
             select c.kind, c.created_at, 'C' || c.id, c.member_id,
                    coalesce(c.replacement_expense_id, c.expense_id), c.payment_id, e.payer_id,
                    coalesce(e.description, p.note), coalesce(e.amount_cents, p.amount_cents), e.category,
-                   p.from_member_id, p.to_member_id
+                   p.from_member_id, p.to_member_id,
+                   case c.kind
+                       when 'EXPENSE_DELETED' then -%2$s
+                       when 'EXPENSE_EDITED' then nullif(coalesce(%3$s, 0) - coalesce(%2$s, 0), 0)
+                       when 'PAYMENT_UNDONE' then -%4$s
+                   end
             from correction c
             left join expense e on e.id = coalesce(c.replacement_expense_id, c.expense_id)
             left join payment p on p.id = c.payment_id
             where c.group_id = :groupId
             union all
             select 'PAYMENT_RECORDED', p.created_at, 'P' || p.id, p.created_by, null, p.id, null,
-                   p.note, p.amount_cents, null, p.from_member_id, p.to_member_id
+                   p.note, p.amount_cents, null, p.from_member_id, p.to_member_id, %5$s
             from payment p where p.group_id = :groupId
             union all
             select 'MEMBER_ADDED', m.created_at, 'M' || m.id, m.invited_by, null, null, m.id,
-                   m.display_name, null, null, null, null
+                   m.display_name, null, null, null, null, null
             from member m where m.group_id = :groupId and m.invited_by is not null
             union all
             select 'MEMBER_JOINED', m.joined_at, 'J' || m.id, m.id, null, null, m.id,
-                   m.display_name, null, null, null, null
+                   m.display_name, null, null, null, null, null
             from member m where m.group_id = :groupId and m.invited_by is not null and m.joined_at is not null
             union all
             -- Visible to everyone on purpose: a reset link lets its creator take over the account.
             select 'PASSWORD_RESET', r.created_at, 'R' || r.id, r.created_by_member_id, null, null,
                    (select m.id from member m where m.group_id = r.group_id and m.user_id = r.user_id),
-                   null, null, null, null, null
+                   null, null, null, null, null, null
             from password_reset r where r.group_id = :groupId
-            """;
+            """.formatted(MY_EXPENSE.formatted("e.id"), MY_EXPENSE.formatted("c.expense_id"),
+            MY_EXPENSE.formatted("c.replacement_expense_id"), MY_PAYMENT.formatted("c.payment_id"),
+            MY_PAYMENT.formatted("p.id"));
 
     private static final RowMapper<ActivityItem> ITEM = (rs, rowNum) -> new ActivityItem(
             rs.getString("id"),
@@ -108,7 +127,8 @@ class ActivityService {
             rs.getObject("amount_cents", Long.class),
             rs.getString("category"),
             rs.getObject("from_member_id", Long.class),
-            rs.getObject("to_member_id", Long.class));
+            rs.getObject("to_member_id", Long.class),
+            rs.getObject("my_change", Long.class));
 
     private final NamedParameterJdbcTemplate jdbc;
 
@@ -117,8 +137,9 @@ class ActivityService {
     }
 
     @Transactional(readOnly = true)
-    public Page feed(long groupId, int limit, Cursor after) {
+    public Page feed(long groupId, long memberId, int limit, Cursor after) {
         MapSqlParameterSource params = new MapSqlParameterSource("groupId", groupId)
+                .addValue("me", memberId)
                 // One row more than requested tells us whether a next page exists.
                 .addValue("limit", limit + 1);
         String afterCursor = "";

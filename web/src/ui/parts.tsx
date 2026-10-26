@@ -9,9 +9,11 @@ import { useSwipeToClose } from './swipe';
  * An amount with the euros in front and the cents and € sign set back, e.g. 87,00 €. The spans
  * still read as one text, so screen readers and copy-paste get "87,00 €".
  */
-export function Money({ cents, big, className = '' }: { cents: number; big?: boolean; className?: string }) {
-  const text = formatCents(cents).replace(/\s/g, ' ');
-  const match = /^(-?[\d.]+)(,\d\d) €$/.exec(text);
+export function Money({ cents, big, signed, className = '' }: { cents: number; big?: boolean; signed?: boolean; className?: string }) {
+  // signed: +12,50 € / −10,00 € (a real minus sign), for changes rather than amounts.
+  const sign = signed ? (cents > 0 ? '+' : cents < 0 ? '−' : '') : '';
+  const text = sign + formatCents(signed ? Math.abs(cents) : cents).replace(/\s/g, ' ');
+  const match = /^([-+−]?[\d.]+)(,\d\d) €$/.exec(text);
   return (
     <span className={`money ${big ? 'big' : ''} ${className}`}>
       {match ? <>{match[1]}<span className="cents">{match[2]}</span><span className="cur"> €</span></> : text}

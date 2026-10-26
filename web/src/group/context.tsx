@@ -46,6 +46,8 @@ export interface GroupContextValue {
   go: (screen: Screen) => void;
   openExpense: (draft: Draft) => void;
   openExpenseDetail: (expenseId: number) => void;
+  /** Edit, delete or details: what a press and hold on an expense row opens. */
+  openExpenseActions: (hit: ExpenseHit) => void;
   openSettle: (debt?: SuggestedPayment) => void;
 }
 

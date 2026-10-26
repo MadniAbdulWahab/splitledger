@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { ExpenseHit } from '../api';
 import { formatShortDate, joinNames } from '../format';
 import { Icon } from '../ui/Icon';
+import { useLongPress } from '../ui/longpress';
 import { Avatar, CategoryTile, Empty, Guilloche, Money, SkeletonRows } from '../ui/parts';
 import { useGroup } from './context';
 
@@ -13,11 +14,26 @@ export function Home({ banners, unread, onOpenFeed }: { banners?: ReactNode; unr
   const iOwe = data.debts.filter((d) => d.fromMemberId === myMemberId);
   const alone = loaded && data.members.length < 2;
 
-  const people = myBalance > 0 ? owesMe.map((d) => ({ id: d.fromMemberId, name: d.fromName }))
-    : iOwe.map((d) => ({ id: d.toMemberId, name: d.toName }));
-  const cardLine = myBalance > 0 ? `${joinNames(people.map((p) => p.name))} ${people.length === 1 ? 'owes' : 'owe'} you`
-    : myBalance < 0 ? `You owe ${joinNames(people.map((p) => p.name))}`
+  // Money can flow both ways: Ben owes you while you owe Kyle. The big number is the net; the
+  // bottom line then shows both sides, so the card never hides a debt.
+  const incoming = owesMe.reduce((sum, d) => sum + d.amountCents, 0);
+  const outgoing = iOwe.reduce((sum, d) => sum + d.amountCents, 0);
+  const mixed = incoming > 0 && outgoing > 0;
+  const fromNames = (list: typeof owesMe, side: 'from' | 'to') => {
+    const names = list.map((d) => (side === 'from' ? d.fromName : d.toName));
+    return names.length > 2 ? `${names.length} people` : joinNames(names);
+  };
+  const people = (myBalance > 0 || (myBalance === 0 && incoming > 0) ? owesMe : iOwe)
+    .map((d) => (d.toMemberId === myMemberId ? { id: d.fromMemberId, name: d.fromName } : { id: d.toMemberId, name: d.toName }));
+  const cardLine = incoming > 0 && outgoing === 0 ? `${fromNames(owesMe, 'from')} ${owesMe.length === 1 ? 'owes' : 'owe'} you`
+    : outgoing > 0 && incoming === 0 ? `You owe ${fromNames(iOwe, 'to')}`
       : data.debts.length > 0 ? 'The others still have amounts open' : 'Nobody owes anybody';
+  const label = mixed
+    ? (myBalance > 0 ? 'Overall you get back' : myBalance < 0 ? 'Overall you owe' : 'Overall you are even')
+    : myBalance > 0 ? 'You get back' : myBalance < 0 ? 'You owe' : 'Your balance';
+  // The chip goes straight to the one person involved, or to the list when there are more.
+  const onlyDebt = owesMe.length + iOwe.length === 1 ? (owesMe[0] ?? iOwe[0]) : undefined;
+  const chipLabel = mixed ? 'Settle' : outgoing > 0 ? 'Pay' : 'Request';
 
   return (
     <>
@@ -29,25 +45,34 @@ export function Home({ banners, unread, onOpenFeed }: { banners?: ReactNode; unr
         <div className="card-top">
           <span className="card-name">{groupName}</span>
           {/* The card's "chip" pays: straight to the GiroCode when only one person is involved. */}
-          {loaded && myBalance !== 0 && (
+          {loaded && (incoming > 0 || outgoing > 0) && (
             <button type="button" className="card-chip"
-              onClick={(e) => { e.stopPropagation(); openSettle(people.length === 1 ? (myBalance < 0 ? iOwe : owesMe)[0] : undefined); }}
+              onClick={(e) => { e.stopPropagation(); openSettle(onlyDebt); }}
               onKeyDown={(e) => e.stopPropagation()}>
-              <Icon name="qr" small />{myBalance < 0 ? 'Pay' : 'Request'}
+              <Icon name="qr" small />{chipLabel}
             </button>
           )}
         </div>
         <div>
-          <p className="card-label">{myBalance > 0 ? 'You get back' : myBalance < 0 ? 'You owe' : 'Your balance'}</p>
+          <p className="card-label">{label}</p>
           {!loaded ? <span className="money big">&nbsp;</span>
-            : myBalance === 0 ? <p className="money big">All settled</p>
+            : myBalance === 0 && !mixed ? <p className="money big">All settled</p>
               : <Money cents={Math.abs(myBalance)} big />}
         </div>
         <div className="card-bottom">
-          {people.length > 0 && (
-            <span className="avatar-stack">{people.slice(0, 4).map((p) => <Avatar key={p.id} id={p.id} name={p.name} size="small" />)}</span>
+          {mixed ? (
+            <span className="card-flows">
+              <span><Money cents={incoming} signed /> from {fromNames(owesMe, 'from')}</span>
+              <span><Money cents={-outgoing} signed /> to {fromNames(iOwe, 'to')}</span>
+            </span>
+          ) : (
+            <>
+              {people.length > 0 && (
+                <span className="avatar-stack">{people.slice(0, 4).map((p) => <Avatar key={p.id} id={p.id} name={p.name} size="small" />)}</span>
+              )}
+              <span>{loaded ? cardLine : ''}</span>
+            </>
           )}
-          <span>{loaded ? cardLine : ''}</span>
           {unread > 0
             ? <span className="card-new">{unread} new</span>
             : <span className="card-more" aria-hidden="true">›</span>}
@@ -129,7 +154,9 @@ export function People() {
 
 /** One expense in a list: what, who paid, when, how much. Corrected ones are crossed out. */
 export function ExpenseRow({ hit, showChange }: { hit: ExpenseHit; showChange?: boolean }) {
-  const { nameOf, myMemberId, openExpenseDetail } = useGroup();
+  const { nameOf, myMemberId, openExpenseDetail, openExpenseActions } = useGroup();
+  // Press and hold (or right-click) for edit and delete; crossed-out versions cannot be changed.
+  const press = useLongPress(() => { if (!hit.reversed) openExpenseActions(hit); });
   const payer = hit.payerId === myMemberId ? 'You paid' : `${nameOf(hit.payerId)} paid`;
   const change = !showChange ? null
     : hit.change === 'DELETED' ? `deleted by ${nameOf(hit.changedBy)}`
@@ -137,7 +164,8 @@ export function ExpenseRow({ hit, showChange }: { hit: ExpenseHit; showChange?: 
         : hit.reversed ? 'deleted' : hit.replacesExpenseId !== null ? 'edited' : null;
   return (
     <li>
-      <button type="button" className={`row clickable ${hit.reversed ? 'struck' : ''}`} onClick={() => openExpenseDetail(hit.id)}>
+      <button type="button" className={`row clickable pressable ${hit.reversed ? 'struck' : ''}`} {...press}
+        onClick={() => openExpenseDetail(hit.id)}>
         <CategoryTile category={hit.category} />
         <span className="grow">
           <span className="title">{hit.description}</span>

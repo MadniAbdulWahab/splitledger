@@ -569,3 +569,23 @@ settle-up (with the GiroCode when one person is involved); hidden when settled.
 `web`: type check OK, 67 unit tests passed (new: `ui/swipe.test.ts`), build OK. In Chrome at
 390×844 with real touch events (CDP): a 220px swipe closes the add sheet, a slow 60px drag springs
 back, "Pay" opens "You pay Ben".
+
+## 2026-10-26: the money feed explains the balance, card shows both sides, press and hold
+
+The feed behind the home card ("How it added up") lists only expenses and payments, each with what
+it did to the reader's balance (`myChangeCents`, from the reader's own ledger entries; deletions and
+undos take back the original, edits count the difference), so the entries add up to the balance.
+The card shows money in both directions ("+12,50 € from Ben", "−10,00 € to Kyle") under the net
+amount, and its button says Settle then. Press and hold (or right-click) on an expense opens Edit,
+Delete, Details.
+
+```
+api  ./mvnw verify   204 tests, 0 failures, 0 errors
+web  npm test        72 tests passed; npm run build OK
+```
+
+`ActivityApiTest` checks every entry's change for both people (Anna: 13,00 € in total, her balance;
+Ben the mirror image). In Chrome at 390×844 with real touch events: holding an expense 0.7 s opens the
+menu, and after release only `touchend` arrives (no mouse press on the menu's backdrop, no click).
+An earlier version closed the menu right away because the release turned into a mouse press on the
+backdrop.

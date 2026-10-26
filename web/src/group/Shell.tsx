@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { unreadCount } from '../activity';
-import { ApiError, type Api, type Me, type SuggestedPayment } from '../api';
+import { ApiError, type Api, type ExpenseHit, type Me, type SuggestedPayment } from '../api';
 import { useInstall } from '../install';
 import { groupHref, inviteCodeFrom, type Route, type Screen } from '../route';
 import { Icon, type IconName } from '../ui/Icon';
@@ -11,7 +11,7 @@ import { ActivityFeed } from './Activity';
 import { Bank } from './Bank';
 import { GroupProvider, useGroupData, type Draft, type GroupContextValue } from './context';
 import { ExpenseSheet } from './ExpenseSheet';
-import { ExpenseDetail, Expenses } from './Expenses';
+import { ExpenseActions, ExpenseDetail, Expenses } from './Expenses';
 import { GroupPage } from './GroupPage';
 import { Home, People } from './Home';
 import { Insights } from './Insights';
@@ -24,6 +24,7 @@ type SheetState =
   | { kind: 'groups' }
   | { kind: 'account' }
   | { kind: 'feed' }
+  | { kind: 'actions'; hit: ExpenseHit }
   | null;
 
 const SIDE_NAV: { screen: Screen; label: string; icon: IconName }[] = [
@@ -117,6 +118,7 @@ function GroupApp({ api, me, groupId, groupName, myMemberId, screen, navigate, o
     go: (s: Screen) => navigate(groupHref(groupId, s)),
     openExpense: (draft: Draft) => setSheet({ kind: 'expense', draft }),
     openExpenseDetail: (expenseId: number) => setSheet({ kind: 'detail', expenseId }),
+    openExpenseActions: (hit: ExpenseHit) => setSheet({ kind: 'actions', hit }),
     openSettle: (debt?: SuggestedPayment) => setSheet({ kind: 'settle', debt }),
   }), [api, groupId, groupName, myMemberId, data, loaded, version, reload, run, nameOf, navigate]);
 
@@ -207,8 +209,9 @@ function GroupApp({ api, me, groupId, groupName, myMemberId, screen, navigate, o
 
       {sheet?.kind === 'expense' && <ExpenseSheet draft={sheet.draft} onClose={closeSheet} />}
       {sheet?.kind === 'detail' && <ExpenseDetail expenseId={sheet.expenseId} onClose={closeSheet} />}
+      {sheet?.kind === 'actions' && <ExpenseActions hit={sheet.hit} onClose={closeSheet} />}
       {sheet?.kind === 'settle' && <SettleSheet initial={sheet.debt} onClose={closeSheet} />}
-      {sheet?.kind === 'feed' && <Sheet title="What happened" onClose={closeSheet}><ActivityFeed onSeen={markSeen} /></Sheet>}
+      {sheet?.kind === 'feed' && <Sheet title="How it added up" onClose={closeSheet}><ActivityFeed onSeen={markSeen} /></Sheet>}
       {sheet?.kind === 'groups' && (
         <GroupsSheet api={api} me={me} current={groupId} onClose={closeSheet}
           onPick={(id) => { closeSheet(); navigate(groupHref(id)); }}

@@ -32,7 +32,14 @@ export function describeActivity(item: ActivityItem, nameOf: (id: number | null)
   }
 }
 
-/** Entries by others since the reader last opened the feed. */
+const MONEY_KINDS: ActivityItem['kind'][] = ['EXPENSE_ADDED', 'EXPENSE_EDITED', 'EXPENSE_DELETED', 'PAYMENT_RECORDED', 'PAYMENT_UNDONE'];
+
+/** Expenses and payments: the entries that explain how a balance came about. */
+export function isMoney(item: ActivityItem): boolean {
+  return MONEY_KINDS.includes(item.kind);
+}
+
+/** Money entries by others since the reader last opened the feed. */
 export function unreadCount(items: ActivityItem[], lastSeen: string | null, me: number): number {
-  return items.filter((i) => (lastSeen === null || i.at > lastSeen) && i.actorMemberId !== me).length;
+  return items.filter((i) => isMoney(i) && (lastSeen === null || i.at > lastSeen) && i.actorMemberId !== me).length;
 }

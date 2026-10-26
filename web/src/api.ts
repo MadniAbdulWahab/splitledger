@@ -49,6 +49,8 @@ export interface ActivityItem {
   id: string; kind: ActivityKind; at: string; actorMemberId: number | null; expenseId: number | null;
   paymentId: number | null; memberId: number | null; description: string | null; amountCents: number | null;
   category: Category | null; fromMemberId: number | null; toMemberId: number | null;
+  /** What this entry did to the reader's balance; null when it moved no money for them. */
+  myChangeCents: number | null;
 }
 export interface Insights {
   from: string; to: string; totalCents: number; myShareCents: number;

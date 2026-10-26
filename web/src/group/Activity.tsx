@@ -1,17 +1,21 @@
 import { useEffect, useState } from 'react';
-import { describeActivity } from '../activity';
+import { describeActivity, isMoney } from '../activity';
 import type { ActivityItem } from '../api';
 import { categoryOf } from '../categories';
 import { relativeTime } from '../format';
+import { formatCents } from '../money';
 import { Avatar, Empty, Money, SkeletonRows } from '../ui/parts';
 import { useGroup } from './context';
 
 const ICONS: Partial<Record<ActivityItem['kind'], string>> = {
-  GROUP_CREATED: '🏁', PAYMENT_RECORDED: '💸', PAYMENT_UNDONE: '↩️', MEMBER_ADDED: '✉️', MEMBER_JOINED: '👋',
-  PASSWORD_RESET: '🔑', EXPENSE_DELETED: '🗑️',
+  PAYMENT_RECORDED: '💸', PAYMENT_UNDONE: '↩️', EXPENSE_DELETED: '🗑️',
 };
 
-/** Everything that happened in the group, newest first; shown in a sheet from the home card. Opening it marks it as read. */
+/**
+ * How your balance came about: every expense and payment, newest first, each with what it did to
+ * your balance (+ the group owes you more, − you owe more). Opened from the home card; opening it
+ * marks it as read. Member events (invited, joined) are left out: they move no money.
+ */
 export function ActivityFeed({ onSeen }: { onSeen: () => void }) {
   const { api, groupId, data, loaded, myMemberId, nameOf, openExpenseDetail } = useGroup();
   const [older, setOlder] = useState<ActivityItem[]>([]);
@@ -31,15 +35,16 @@ export function ActivityFeed({ onSeen }: { onSeen: () => void }) {
     setCursor(page.nextCursor);
   }
 
-  const items = [...data.activity, ...older];
+  const items = [...data.activity, ...older].filter(isMoney);
   return (
     <>
       {!loaded ? <SkeletonRows count={6} /> : items.length === 0
-        ? <div className="list"><Empty emoji="🕊️" title="Nothing yet" text="Expenses, payments and new members show up here." /></div>
+        ? <div className="list"><Empty emoji="🧾" title="No money moved yet" text="Every expense and payment shows up here, with what it did to your balance." /></div>
         : (
           <ul className="list">
             {items.map((a) => {
-              const who = a.kind === 'PAYMENT_RECORDED' ? a.fromMemberId : a.kind === 'MEMBER_JOINED' ? a.memberId : a.actorMemberId ?? a.memberId;
+              const who = a.kind === 'PAYMENT_RECORDED' ? a.fromMemberId : a.actorMemberId ?? a.memberId;
+              const mine = a.myChangeCents !== null && a.myChangeCents !== 0;
               const emoji = a.kind.startsWith('EXPENSE') && a.kind !== 'EXPENSE_DELETED' ? categoryOf(a.category).emoji : ICONS[a.kind];
               const opensExpense = a.expenseId !== null && a.kind !== 'EXPENSE_DELETED';
               const body = (
@@ -50,9 +55,14 @@ export function ActivityFeed({ onSeen }: { onSeen: () => void }) {
                   </span>
                   <span className="grow">
                     <span className="title" style={{ whiteSpace: 'normal' }}>{describeActivity(a, nameOf, myMemberId)}</span>
-                    <span className="sub">{relativeTime(a.at)}</span>
+                    <span className="sub">
+                      {relativeTime(a.at)}
+                      {a.amountCents !== null && (mine ? `, ${formatCents(a.amountCents)} in total` : ', you are not in it')}
+                    </span>
                   </span>
-                  {a.amountCents !== null && <Money cents={a.amountCents} className={a.kind === 'EXPENSE_DELETED' || a.kind === 'PAYMENT_UNDONE' ? 'muted' : ''} />}
+                  {mine
+                    ? <Money cents={a.myChangeCents!} signed className={a.myChangeCents! > 0 ? 'owed' : 'owe'} />
+                    : a.amountCents !== null && <Money cents={a.amountCents} className="muted" />}
                 </>
               );
               return (

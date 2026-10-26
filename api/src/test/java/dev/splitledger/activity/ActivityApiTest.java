@@ -54,6 +54,17 @@ class ActivityApiTest extends IntegrationTest {
         assertThat((Integer) JsonPath.read(feed, "$.items[2].fromMemberId")).isEqualTo((int) ben);
         assertThat((Integer) JsonPath.read(feed, "$.items[0].memberId")).as("whose password").isEqualTo((int) anna);
         assertThat((String) JsonPath.read(feed, "$.items[9].description")).isEqualTo("Flat");
+
+        // What each entry did to Anna's balance; together it is her balance (half of the edited 26,00).
+        // Pizza +12,00 (paid 24,00, her share 12,00), Kino +8,00 then deleted -8,00, the edit +1,00,
+        // Ben's payment -13,00 and its undo +13,00; member events move no money.
+        List<Integer> changes = JsonPath.read(feed, "$.items[*].myChangeCents");
+        assertThat(changes).containsExactly(null, 1300, -1300, 100, -800, 800, 1200, null, null, null);
+        assertThat(changes.stream().filter(java.util.Objects::nonNull).mapToInt(Integer::intValue).sum()).isEqualTo(1300);
+        // Ben sees the same entries from his side.
+        String bensFeed = body(benClient.get().uri("/groups/{g}/activity", groupId).exchange());
+        assertThat((List<Integer>) JsonPath.read(bensFeed, "$.items[*].myChangeCents"))
+                .containsExactly(null, -1300, 1300, -100, 800, -800, -1200, null, null, null);
     }
 
     @Test

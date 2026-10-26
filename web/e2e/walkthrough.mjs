@@ -140,9 +140,11 @@ async function walkthrough(name, options) {
   // The home card says what is new and opens the feed.
   await ben.page.locator('.group-card .card-new').waitFor();
   await ben.page.locator('.group-card.clickable').click();
-  await ben.page.getByRole('heading', { name: 'What happened' }).waitFor();
-  await ben.page.getByText('Anna Beispiel added REWE').waitFor();
-  await ben.page.getByText('You joined').waitFor();
+  await ben.page.getByRole('heading', { name: 'How it added up' }).waitFor();
+  // Only money, each entry with what it did to Ben's balance: REWE was all his share.
+  const rewe = ben.page.locator('.sheet .list li', { hasText: 'Anna Beispiel added REWE' });
+  await shows(rewe, '−42,00', 'REWE took 42,00 from Ben');
+  check(await ben.page.getByText('You joined').count() === 0, 'member events are not in the money feed');
   await ben.shot('07-activity');
   await ben.page.getByRole('button', { name: 'Close' }).click();
   await ben.page.locator('.group-card .card-new').waitFor({ state: 'detached' });

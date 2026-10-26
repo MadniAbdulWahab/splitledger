@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { describeActivity, unreadCount } from './activity';
+import { describeActivity, isMoney, unreadCount } from './activity';
 import type { ActivityItem } from './api';
 
 const names = new Map([[1, 'Anna'], [2, 'Ben'], [3, 'Lucy']]);
@@ -8,7 +8,8 @@ const nameOf = (id: number | null) => (id === null ? 'Someone' : names.get(id) ?
 function item(fields: Partial<ActivityItem>): ActivityItem {
   return {
     id: 'X1', kind: 'EXPENSE_ADDED', at: '2026-10-25T12:00:00Z', actorMemberId: null, expenseId: null, paymentId: null,
-    memberId: null, description: null, amountCents: null, category: null, fromMemberId: null, toMemberId: null, ...fields,
+    memberId: null, description: null, amountCents: null, category: null, fromMemberId: null, toMemberId: null,
+    myChangeCents: null, ...fields,
   };
 }
 
@@ -26,6 +27,19 @@ describe('describeActivity', () => {
 
   it('handles entries from before the creator was recorded', () => {
     expect(describeActivity(item({ actorMemberId: null, memberId: 3, description: 'Bahn' }), nameOf, 1)).toBe('Lucy added Bahn');
+  });
+});
+
+describe('isMoney', () => {
+  it('keeps expenses and payments, not member events', () => {
+    expect(isMoney(item({ kind: 'EXPENSE_DELETED' }))).toBe(true);
+    expect(isMoney(item({ kind: 'PAYMENT_UNDONE' }))).toBe(true);
+    expect(isMoney(item({ kind: 'MEMBER_JOINED' }))).toBe(false);
+    expect(isMoney(item({ kind: 'GROUP_CREATED' }))).toBe(false);
+  });
+
+  it('does not count member events as new', () => {
+    expect(unreadCount([item({ kind: 'MEMBER_JOINED', actorMemberId: 2 })], null, 1)).toBe(0);
   });
 });
 

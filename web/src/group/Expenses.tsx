@@ -3,6 +3,7 @@ import type { Expense, ExpenseHit } from '../api';
 import { CATEGORIES, categoryOf, type Category } from '../categories';
 import { formatDate, formatDateTime, formatMonth } from '../format';
 import { formatCents } from '../money';
+import { useToast } from '../ui/toast';
 import { Icon } from '../ui/Icon';
 import { Avatar, Empty, Money, Sheet, SkeletonRows } from '../ui/parts';
 import { useGroup } from './context';
@@ -146,6 +147,29 @@ function Payments() {
         </li>
       ))}
     </ul>
+  );
+}
+
+/** What a press and hold on an expense opens: edit, delete or the details. */
+export function ExpenseActions({ hit, onClose }: { hit: ExpenseHit; onClose: () => void }) {
+  const { api, groupId, run, openExpense, openExpenseDetail } = useGroup();
+  const toast = useToast();
+  return (
+    <Sheet title={hit.description} onClose={onClose}>
+      <div className="stack">
+        <p className="muted"><Money cents={hit.amountCents} />, {formatDate(hit.expenseDate)}</p>
+        <button type="button" className="btn btn-quiet btn-block" onClick={() => {
+          api.getExpense(groupId, hit.id).then((expense) => openExpense({ kind: 'edit', expense }),
+            (e: Error) => toast(e.message, 'error'));
+        }}>Edit</button>
+        <button type="button" className="btn btn-danger btn-block" onClick={() => {
+          if (window.confirm(`Delete “${hit.description}”? It stays in the history, crossed out.`)) {
+            void run(() => api.deleteExpense(groupId, hit.id), `Deleted “${hit.description}”`).then((ok) => { if (ok) onClose(); });
+          }
+        }}>Delete</button>
+        <button type="button" className="btn btn-link" onClick={() => openExpenseDetail(hit.id)}>Details</button>
+      </div>
+    </Sheet>
   );
 }
 
